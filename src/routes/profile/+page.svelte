@@ -2,8 +2,9 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase/client';
 	import { goto } from '$app/navigation';
-	import { Scale, TrendingDown, Calendar, Plus } from 'lucide-svelte';
+	import { Scale, TrendingDown, Calendar, Plus, Download } from 'lucide-svelte';
 	import WeightChart from '$lib/components/WeightChart.svelte';
+	import { exportAsJSON, exportWorkoutsAsCSV, exportBodyMetricsAsCSV, downloadFile } from '$lib/utils/export';
 
 	let bodyMetrics = $state<Array<{ id: string; date: string; weight_kg: number | null; body_fat_percentage: number | null }>>([]);
 	let isLoading = $state(true);
@@ -256,11 +257,58 @@
 			{/if}
 		</div>
 
-		<!-- Settings Section -->
+		<!-- Export Data Section -->
 		<div>
-			<h2 class="text-lg font-semibold text-[var(--color-foreground)] mb-4">Settings</h2>
-			<div class="fitness-card">
-				<p class="text-sm text-[var(--color-muted)]">More settings coming soon...</p>
+			<h2 class="text-lg font-semibold text-[var(--color-foreground)] mb-4">Export Data</h2>
+			<div class="fitness-card space-y-3">
+				<button
+					onclick={async () => {
+						try {
+							const json = await exportAsJSON();
+							downloadFile(json, `fit-check-export-${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+						} catch (error) {
+							alert('Failed to export data. Please try again.');
+						}
+					}}
+					class="w-full flex items-center justify-between p-3 bg-[var(--color-card-hover)] rounded-lg hover:bg-[var(--color-primary)]/10 transition-colors"
+				>
+					<div class="flex items-center gap-3">
+						<Download class="w-5 h-5 text-[var(--color-primary)]" />
+						<span class="text-sm font-semibold text-[var(--color-foreground)]">Export All Data (JSON)</span>
+					</div>
+				</button>
+				<button
+					onclick={async () => {
+						try {
+							const csv = await exportWorkoutsAsCSV();
+							downloadFile(csv, `workouts-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+						} catch (error) {
+							alert('Failed to export workouts. Please try again.');
+						}
+					}}
+					class="w-full flex items-center justify-between p-3 bg-[var(--color-card-hover)] rounded-lg hover:bg-[var(--color-primary)]/10 transition-colors"
+				>
+					<div class="flex items-center gap-3">
+						<Download class="w-5 h-5 text-[var(--color-primary)]" />
+						<span class="text-sm font-semibold text-[var(--color-foreground)]">Export Workouts (CSV)</span>
+					</div>
+				</button>
+				<button
+					onclick={async () => {
+						try {
+							const csv = await exportBodyMetricsAsCSV();
+							downloadFile(csv, `body-metrics-${new Date().toISOString().split('T')[0]}.csv`, 'text/csv');
+						} catch (error) {
+							alert('Failed to export body metrics. Please try again.');
+						}
+					}}
+					class="w-full flex items-center justify-between p-3 bg-[var(--color-card-hover)] rounded-lg hover:bg-[var(--color-primary)]/10 transition-colors"
+				>
+					<div class="flex items-center gap-3">
+						<Download class="w-5 h-5 text-[var(--color-primary)]" />
+						<span class="text-sm font-semibold text-[var(--color-foreground)]">Export Body Metrics (CSV)</span>
+					</div>
+				</button>
 			</div>
 		</div>
 	</div>

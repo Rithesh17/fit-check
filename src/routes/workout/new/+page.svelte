@@ -2,9 +2,10 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase/client';
-	import { exercises, type Exercise } from '$lib/data/exercises';
+	import { exercises, getExerciseById, type Exercise } from '$lib/data/exercises';
 	import { workoutTemplates, templateToWorkoutExercises, type WorkoutTemplate } from '$lib/data/workout-templates';
-	import { Search, Plus, X, Play, Check, Activity } from 'lucide-svelte';
+	import { getRecentExercises } from '$lib/utils/recent-exercises';
+	import { Search, Plus, X, Play, Check, Activity, Timer, Clock } from 'lucide-svelte';
 
 	let workoutName = $state('');
 	let selectedExercises = $state<Array<{ exercise: Exercise; sets: Array<{ reps: number; weight: number; rest: number; completed: boolean }> }>>([]);
@@ -13,6 +14,34 @@
 	let showTemplates = $state(true); // Show templates by default
 	let selectedTemplates = $state<Set<string>>(new Set());
 	let isLoading = $state(false);
+	let searchInputElement: HTMLInputElement | null = $state(null);
+	let recentExercises = $state<Array<{ exerciseId: string; exerciseName: string; lastUsed: Date; useCount: number }>>([]);
+	let showRecentExercises = $state(false);
+
+	// Focus search input when modal opens
+	$effect(() => {
+		if (showExerciseSearch && searchInputElement) {
+			setTimeout(() => searchInputElement?.focus(), 100);
+		}
+	});
+
+	// Load recent exercises
+	onMount(async () => {
+		if (!showTemplates) {
+			recentExercises = await getRecentExercises(8);
+		}
+	});
+
+	$effect(() => {
+		if (!showTemplates && recentExercises.length === 0) {
+			getRecentExercises(8).then((exercises) => {
+				recentExercises = exercises.map((ex) => ({
+					...ex,
+					exerciseName: getExerciseById(ex.exerciseId)?.name || ex.exerciseId
+				}));
+			});
+		}
+	});
 
 	// Filter exercises based on search
 	let filteredExercises = $derived(
@@ -167,6 +196,25 @@
 		});
 	}
 
+	function startActiveWorkout() {
+		if (selectedExercises.length === 0) {
+			alert('Please add at least one exercise');
+			return;
+		}
+
+		// Save workout data to sessionStorage
+		const workoutData = {
+			name: workoutName || 'Workout',
+			exercises: selectedExercises.map((ex) => ({
+				exerciseId: ex.exercise.id,
+				sets: ex.sets
+			}))
+		};
+
+		sessionStorage.setItem('activeWorkout', JSON.stringify(workoutData));
+		goto('/workout/active');
+	}
+
 	async function saveWorkout() {
 		if (selectedExercises.length === 0) {
 			alert('Please add at least one exercise');
@@ -229,13 +277,25 @@
 				<X class="w-6 h-6" />
 			</a>
 			<h1 class="text-xl font-bold text-[var(--color-foreground)]">New Workout</h1>
-			<button
-				onclick={saveWorkout}
-				disabled={isLoading || selectedExercises.length === 0}
-				class="px-4 py-2 bg-[var(--gradient-primary)] text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-			>
-				{isLoading ? 'Saving...' : 'Save'}
-			</button>
+			<div class="flex gap-2">
+				{#if !showTemplates && selectedExercises.length > 0}
+					<button
+						onclick={startActiveWorkout}
+						class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform flex items-center gap-2"
+						title="Start active workout with timer"
+					>
+						<Play class="w-4 h-4" />
+						Start
+					</button>
+				{/if}
+				<button
+					onclick={saveWorkout}
+					disabled={isLoading || selectedExercises.length === 0}
+					class="px-4 py-2 bg-[var(--gradient-primary)] text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+				>
+					{isLoading ? 'Saving...' : 'Save'}
+				</button>
+			</div>
 		</div>
 	</div>
 
@@ -317,8 +377,9 @@
 
 			<!-- Workout Name -->
 			<div class="fitness-card">
-				<label class="block text-sm font-semibold text-[var(--color-muted)] mb-2">Workout Name</label>
+				<label for="workout-name-input" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">Workout Name</label>
 				<input
+					id="workout-name-input"
 					type="text"
 					bind:value={workoutName}
 					placeholder="e.g., Push Day, Leg Day"
@@ -334,6 +395,40 @@
 				<Plus class="w-5 h-5 text-[var(--color-primary)]" />
 				<span class="font-semibold text-[var(--color-foreground)]">Add Exercise</span>
 			</button>
+
+			<!-- Recent Exercises Quick Add -->
+			{#if recentExercises.length > 0}
+				<div class="fitness-card">
+					<div class="flex items-center justify-between mb-3">
+						<div class="flex items-center gap-2">
+							<Clock class="w-4 h-4 text-[var(--color-muted)]" />
+							<h3 class="text-sm font-semibold text-[var(--color-foreground)]">Recent Exercises</h3>
+						</div>
+						<button
+							onclick={() => (showRecentExercises = !showRecentExercises)}
+							class="text-xs text-[var(--color-primary)] hover:underline"
+						>
+							{showRecentExercises ? 'Hide' : 'Show'}
+						</button>
+					</div>
+					{#if showRecentExercises}
+						<div class="flex flex-wrap gap-2">
+							{#each recentExercises as recent}
+								{@const exercise = getExerciseById(recent.exerciseId)}
+								{#if exercise && !selectedExercises.some((e) => e.exercise.id === exercise.id)}
+									<button
+										onclick={() => addExercise(exercise)}
+										class="px-3 py-1.5 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+										title="Used {recent.useCount} time{recent.useCount !== 1 ? 's' : ''} in last 30 days"
+									>
+										{exercise.name}
+									</button>
+								{/if}
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
 		{/if}
 
 		<!-- Selected Exercises -->
@@ -343,14 +438,24 @@
 					<h2 class="text-lg font-semibold text-[var(--color-foreground)]">
 						Exercises ({selectedExercises.length})
 					</h2>
-					{#if selectedExercises.length > 1}
+					<div class="flex items-center gap-3">
 						<button
-							onclick={clearAllExercises}
-							class="text-sm text-[var(--color-muted)] hover:text-[var(--color-danger)] font-medium"
+							onclick={startActiveWorkout}
+							class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform flex items-center gap-2 text-sm"
+							title="Start active workout with timer"
 						>
-							Clear All
+							<Play class="w-4 h-4" />
+							Start Workout
 						</button>
-					{/if}
+						{#if selectedExercises.length > 1}
+							<button
+								onclick={clearAllExercises}
+								class="text-sm text-[var(--color-muted)] hover:text-[var(--color-danger)] font-medium"
+							>
+								Clear All
+							</button>
+						{/if}
+					</div>
 				</div>
 				{#each selectedExercises as { exercise, sets }, exerciseIndex}
 					<div class="fitness-card">
@@ -430,21 +535,34 @@
 	{#if showExerciseSearch}
 		<div
 			class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end"
+			role="button"
+			tabindex="0"
 			onclick={() => (showExerciseSearch = false)}
+			onkeydown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					showExerciseSearch = false;
+				}
+			}}
 		>
         <div
           class="w-full max-w-md mx-auto bg-[var(--color-card)] rounded-t-3xl max-h-[80vh] overflow-hidden flex flex-col"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Exercise search"
+          tabindex="-1"
           onclick={(e) => e.stopPropagation()}
+          onkeydown={(e) => e.stopPropagation()}
         >
 				<div class="p-4 border-b border-[var(--color-border)]">
 					<div class="flex items-center gap-3 mb-4">
 						<Search class="w-5 h-5 text-[var(--color-muted)]" />
 						<input
+							bind:this={searchInputElement}
 							type="text"
 							bind:value={searchQuery}
 							placeholder="Search exercises..."
 							class="flex-1 px-4 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
-							autofocus
 						/>
 					</div>
 					<button

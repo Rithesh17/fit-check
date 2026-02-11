@@ -4,6 +4,8 @@
 	import { exercises, getExerciseById } from '$lib/data/exercises';
 	import { calculateExerciseProgress, getPersonalRecords, type ExerciseProgress } from '$lib/utils/progress';
 	import StrengthChart from '$lib/components/StrengthChart.svelte';
+	import VolumeTrendChart from '$lib/components/VolumeTrendChart.svelte';
+	import MuscleGroupChart from '$lib/components/MuscleGroupChart.svelte';
 	import { TrendingUp, Award, Activity } from 'lucide-svelte';
 
 	let selectedExerciseId = $state<string | null>(null);
@@ -255,6 +257,12 @@
 					</div>
 				{/if}
 			</div>
+
+			<!-- Volume Trends -->
+			<VolumeTrendChart />
+
+			<!-- Muscle Group Distribution -->
+			<MuscleGroupChart />
 		{/if}
 	</div>
 </div>

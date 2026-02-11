@@ -2,14 +2,17 @@
 	import { onMount } from 'svelte';
 	import { onNavigate } from '$app/navigation';
 	import BottomNav from '$lib/components/BottomNav.svelte';
+	import SyncStatus from '$lib/components/SyncStatus.svelte';
 	import { initOfflineStorage } from '$lib/storage/offline';
+	import { initSyncProcessing } from '$lib/storage/sync';
 	import '$lib/index.css';
 
 	let { data, children } = $props();
 
-	// Initialize offline storage
+	// Initialize offline storage and sync processing
 	onMount(async () => {
 		await initOfflineStorage();
+		await initSyncProcessing();
 	});
 
 	// Disable view transitions for smoother scroll animations
@@ -18,6 +21,7 @@
 	});
 </script>
 
+<SyncStatus />
 <main class="min-h-screen bg-[var(--color-background)]">
 	{@render children()}
 </main>

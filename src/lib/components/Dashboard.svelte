@@ -3,8 +3,10 @@
 	import { supabase } from '$lib/supabase/client';
 	import { calculateStreak, workedOutToday, daysSinceLastWorkout } from '$lib/utils/streak';
 	import type { StreakData } from '$lib/utils/streak';
-	import { Flame, TrendingUp, Calendar, Activity } from 'lucide-svelte';
+	import { getAchievedMilestones, getMilestoneProgress } from '$lib/utils/streak-milestones';
+	import { Flame, TrendingUp, Calendar, Activity, Award } from 'lucide-svelte';
 	import RecentWorkouts from './RecentWorkouts.svelte';
+	import StreakCalendar from './StreakCalendar.svelte';
 
 	let { data } = $props();
 
@@ -192,6 +194,48 @@
 					</div>
 				</div>
 			{/if}
+
+			<!-- Streak Milestones -->
+			{#if streakData.currentStreak > 0}
+				{@const achieved = getAchievedMilestones(streakData.currentStreak)}
+				{@const next = getMilestoneProgress(streakData.currentStreak)}
+				<div class="fitness-card">
+					<div class="flex items-center gap-2 mb-4">
+						<Award class="w-5 h-5 text-[var(--color-accent)]" />
+						<h2 class="text-lg font-semibold text-[var(--color-foreground)]">Milestones</h2>
+					</div>
+					{#if achieved.length > 0}
+						<div class="space-y-2 mb-4">
+							{#each achieved as milestone}
+								<div class="flex items-center gap-2 p-2 bg-[var(--color-card-hover)] rounded-lg">
+									<span class="text-2xl">{milestone.icon}</span>
+									<div class="flex-1">
+										<div class="font-semibold text-[var(--color-foreground)]">{milestone.name}</div>
+										<div class="text-xs text-[var(--color-muted)]">{milestone.description}</div>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+					{#if next}
+						<div class="pt-4 border-t border-[var(--color-border)]">
+							<div class="text-sm text-[var(--color-muted)] mb-2">Next: {next.milestone.name}</div>
+							<div class="w-full bg-[var(--color-card-hover)] rounded-full h-2 mb-1">
+								<div
+									class="h-2 rounded-full transition-all"
+									style="width: {(next.progress * 100).toFixed(0)}%; background: {next.milestone.color};"
+								></div>
+							</div>
+							<div class="text-xs text-[var(--color-muted)]">
+								{next.daysRemaining} day{next.daysRemaining !== 1 ? 's' : ''} to go
+							</div>
+						</div>
+					{/if}
+				</div>
+			{/if}
+
+			<!-- Streak Calendar -->
+			<StreakCalendar />
 
 			<!-- Recent Workouts -->
 			<div>
