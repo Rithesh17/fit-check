@@ -152,6 +152,52 @@ export interface Database {
 					updated_at?: string;
 				};
 			};
+			workout_templates: {
+				Row: {
+					id: string;
+					name: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					name?: string | null;
+					created_at?: string;
+					updated_at?: string;
+				};
+				Update: {
+					id?: string;
+					name?: string | null;
+					created_at?: string;
+					updated_at?: string;
+				};
+			};
+			workout_template_exercises: {
+				Row: {
+					id: string;
+					workout_template_id: string;
+					exercise_id: string;
+					exercise_order: number;
+					sets: Json;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					workout_template_id: string;
+					exercise_id: string;
+					exercise_order: number;
+					sets: Json;
+					created_at?: string;
+				};
+				Update: {
+					id?: string;
+					workout_template_id?: string;
+					exercise_id?: string;
+					exercise_order?: number;
+					sets?: Json;
+					created_at?: string;
+				};
+			};
 			body_metrics: {
 				Row: {
 					id: string;

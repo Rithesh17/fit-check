@@ -168,20 +168,21 @@
 				</div>
 			</div>
 
-			<!-- Today's Workout Card -->
-			{#if !hasWorkedOutToday}
-				<a href="/workout/new" class="fitness-card block hover:scale-[1.02] transition-transform">
-					<div class="flex items-center justify-between">
-						<div>
-							<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-1">Start Workout</h3>
-							<p class="text-sm text-[var(--color-muted)]">Log your workout to keep your streak alive</p>
-						</div>
-						<div class="w-12 h-12 rounded-full bg-[var(--gradient-primary)] flex items-center justify-center">
-							<Activity class="w-6 h-6 text-white" />
-						</div>
+			<!-- Start Workout Card - always visible so user can do multiple workouts per day -->
+			<a href="/workouts" class="fitness-card block hover:scale-[1.02] transition-transform">
+				<div class="flex items-center justify-between">
+					<div>
+						<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-1">Start Workout</h3>
+						<p class="text-sm text-[var(--color-muted)]">
+							{hasWorkedOutToday ? 'Start another workout' : 'Pick a workout or create new to log for today'}
+						</p>
 					</div>
-				</a>
-			{:else}
+					<div class="w-12 h-12 rounded-full bg-[var(--gradient-primary)] flex items-center justify-center">
+						<Activity class="w-6 h-6 text-white" />
+					</div>
+				</div>
+			</a>
+			{#if hasWorkedOutToday}
 				<div class="fitness-card border-[var(--color-accent)]/50">
 					<div class="flex items-center gap-3">
 						<div class="w-12 h-12 rounded-full bg-[var(--color-accent)]/20 flex items-center justify-center">
@@ -244,7 +245,7 @@
 					<div class="fitness-card text-center py-8">
 						<Activity class="w-12 h-12 text-[var(--color-muted)] mx-auto mb-3 opacity-50" />
 						<p class="text-[var(--color-muted)] mb-4">No workouts yet</p>
-						<a href="/workout/new" class="inline-block px-6 py-2 bg-[var(--gradient-primary)] text-white font-semibold rounded-lg hover:scale-105 transition-transform">
+						<a href="/workouts" class="inline-block px-6 py-2 bg-[var(--gradient-primary)] text-white font-semibold rounded-lg hover:scale-105 transition-transform">
 							Start Your First Workout
 						</a>
 					</div>

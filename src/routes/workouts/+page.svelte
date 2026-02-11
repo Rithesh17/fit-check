@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase/client';
-	import { exercises, getExercisesByMuscleGroup, searchExercises, type Exercise } from '$lib/data/exercises';
-	import { Search, Filter, X, Plus, ChevronLeft, ChevronRight, Activity, BookOpen } from 'lucide-svelte';
+	import { exercises, getExerciseById, getExercisesByMuscleGroup, searchExercises, type Exercise } from '$lib/data/exercises';
+	import { Search, X, Plus, ChevronLeft, ChevronRight, Activity, BookOpen, Play } from 'lucide-svelte';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import ExerciseEditor from '$lib/components/ExerciseEditor.svelte';
 	import { goto } from '$app/navigation';
-	import RecentWorkouts from '$lib/components/RecentWorkouts.svelte';
 	import { Calendar, Clock } from 'lucide-svelte';
 
 	// View mode: 'workouts' or 'exercises'
@@ -20,9 +19,11 @@
 	let exerciseToEdit = $state<Exercise | null>(null);
 	let isEditing = $state(false);
 
-	// Workout-related state
-	let workouts = $state<any[]>([]);
+	// Workout-related state: templates (saved plans) + completed sessions (history)
+	let workoutTemplates = $state<Array<{ id: string; name: string | null; exercise_count: number }>>([]);
+	let completedWorkouts = $state<any[]>([]);
 	let isLoadingWorkouts = $state(true);
+	let templateExercisesMap = $state<Record<string, Array<{ exercise_id: string; exercise_order: number; sets: Array<{ reps: number; weight: number; rest: number }> }>>>({});
 
 	// Pagination
 	const EXERCISES_PER_PAGE = 20;
@@ -94,7 +95,41 @@
 	async function loadWorkouts() {
 		try {
 			isLoadingWorkouts = true;
-			const { data, error } = await supabase
+			// Load saved templates (workout plans to start)
+			const { data: templates, error: templatesError } = await supabase
+				.from('workout_templates')
+				.select('id, name')
+				.order('created_at', { ascending: false });
+
+			if (templatesError) throw templatesError;
+
+			const { data: templateExs, error: templateExsError } = await supabase
+				.from('workout_template_exercises')
+				.select('workout_template_id, exercise_id, exercise_order, sets')
+				.order('exercise_order', { ascending: true });
+
+			if (templateExsError) throw templateExsError;
+
+			const map: Record<string, Array<{ exercise_id: string; exercise_order: number; sets: Array<{ reps: number; weight: number; rest: number }> }>> = {};
+			for (const row of templateExs || []) {
+				const arr = map[row.workout_template_id] || [];
+				arr.push({
+					exercise_id: row.exercise_id,
+					exercise_order: row.exercise_order,
+					sets: (row.sets as Array<{ reps: number; weight: number; rest: number }>) || []
+				});
+				map[row.workout_template_id] = arr;
+			}
+			templateExercisesMap = map;
+
+			workoutTemplates = (templates || []).map((t: any) => ({
+				id: t.id,
+				name: t.name,
+				exercise_count: (map[t.id] || []).length
+			}));
+
+			// Load completed workout sessions (history)
+			const { data: completed, error: completedError } = await supabase
 				.from('workouts')
 				.select(`
 					id,
@@ -103,11 +138,12 @@
 					duration_minutes,
 					workout_exercises(count)
 				`)
-				.order('date', { ascending: false });
+				.order('date', { ascending: false })
+				.limit(20);
 
-			if (error) throw error;
+			if (completedError) throw completedError;
 
-			workouts = (data || []).map((w: any) => ({
+			completedWorkouts = (completed || []).map((w: any) => ({
 				id: w.id,
 				name: w.name,
 				date: w.date,
@@ -119,6 +155,34 @@
 		} finally {
 			isLoadingWorkouts = false;
 		}
+	}
+
+	function startTemplate(templateId: string) {
+		const name = workoutTemplates.find((t) => t.id === templateId)?.name || 'Workout';
+		const exs = templateExercisesMap[templateId] || [];
+		const exercisesPayload = exs
+			.map((ex) => {
+				const exercise = getExerciseById(ex.exercise_id);
+				if (!exercise) return null;
+				const sets = (ex.sets.length ? ex.sets : [{ reps: exercise.defaultReps, weight: 0, rest: exercise.defaultRestSeconds }]).map(
+					(s) => ({ ...s, completed: false })
+				);
+				return { exerciseId: exercise.id, sets };
+			})
+			.filter(Boolean);
+		if (exercisesPayload.length === 0) {
+			alert('This template has no valid exercises.');
+			return;
+		}
+		const workoutData = {
+			name,
+			notes: '',
+			energyLevel: null as number | null,
+			mood: '',
+			exercises: exercisesPayload
+		};
+		sessionStorage.setItem('activeWorkout', JSON.stringify(workoutData));
+		goto('/workout/active');
 	}
 
 	function formatDate(dateString: string): string {
@@ -279,59 +343,96 @@
 	<!-- Content -->
 	<div class="max-w-md mx-auto px-4 py-6">
 		{#if viewMode === 'workouts'}
-			<!-- Workouts View -->
+			<!-- Workouts View: templates to start + New, then recent completed sessions -->
 			{#if isLoadingWorkouts}
 				<div class="space-y-3">
 					{#each Array(3) as _}
 						<div class="fitness-card animate-pulse h-24"></div>
 					{/each}
 				</div>
-			{:else if workouts.length === 0}
-				<div class="fitness-card text-center py-12">
-					<Activity class="w-12 h-12 text-[var(--color-muted)] mx-auto mb-4 opacity-50" />
-					<p class="text-[var(--color-muted)] mb-4">No workouts yet</p>
-					<button
-						onclick={() => goto('/workout/new')}
-						class="px-6 py-3 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform"
-					>
-						Start Your First Workout
-					</button>
-				</div>
 			{:else}
-				<div class="space-y-3">
-					{#each workouts as workout}
+				<!-- Your workout plans: templates + New -->
+				<div class="mb-6">
+					<h2 class="text-sm font-semibold text-[var(--color-muted)] mb-3">Your workout plans</h2>
+					<div class="space-y-3">
 						<button
-							onclick={() => goto(`/workout/${workout.id}`)}
-							class="w-full fitness-card text-left hover:scale-[1.02] transition-transform"
+							onclick={() => goto('/workout/new')}
+							class="w-full fitness-card text-left hover:scale-[1.02] transition-transform flex items-center gap-4 border-2 border-dashed border-[var(--color-primary)]/50"
 						>
-							<div class="flex items-start justify-between">
-								<div class="flex-1">
-									<div class="flex items-center gap-2 mb-2">
-										<Calendar class="w-4 h-4 text-[var(--color-muted)]" />
-										<span class="text-sm text-[var(--color-muted)]">{formatDate(workout.date)}</span>
-									</div>
-									<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-2">
-										{workout.name || 'Workout'}
-									</h3>
-									<div class="flex items-center gap-4 text-sm text-[var(--color-muted)]">
-										{#if workout.exercise_count !== undefined}
-											<div class="flex items-center gap-1">
-												<Activity class="w-4 h-4" />
-												<span>{workout.exercise_count} exercise{workout.exercise_count !== 1 ? 's' : ''}</span>
-											</div>
-										{/if}
-										{#if workout.duration_minutes}
-											<div class="flex items-center gap-1">
-												<Clock class="w-4 h-4" />
-												<span>{workout.duration_minutes} min</span>
-											</div>
-										{/if}
-									</div>
-								</div>
+							<div class="w-12 h-12 rounded-full bg-[var(--color-primary)]/20 flex items-center justify-center flex-shrink-0">
+								<Plus class="w-6 h-6 text-[var(--color-primary)]" />
+							</div>
+							<div>
+								<h3 class="text-lg font-semibold text-[var(--color-foreground)]">New workout</h3>
+								<p class="text-sm text-[var(--color-muted)]">Create and save a new workout plan</p>
 							</div>
 						</button>
-					{/each}
+						{#each workoutTemplates as template}
+							<div
+								class="fitness-card flex items-center justify-between gap-3"
+							>
+								<div class="flex-1 min-w-0">
+									<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-1 truncate">
+										{template.name || 'Workout'}
+									</h3>
+									<div class="flex items-center gap-1 text-sm text-[var(--color-muted)]">
+										<Activity class="w-4 h-4" />
+										<span>{template.exercise_count} exercise{template.exercise_count !== 1 ? 's' : ''}</span>
+									</div>
+								</div>
+								<button
+									onclick={() => startTemplate(template.id)}
+									class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform flex items-center gap-2 flex-shrink-0"
+									title="Start this workout"
+								>
+									<Play class="w-4 h-4" />
+									Start
+								</button>
+							</div>
+						{/each}
+					</div>
 				</div>
+
+				<!-- Recent completed sessions -->
+				{#if completedWorkouts.length > 0}
+					<div>
+						<h2 class="text-sm font-semibold text-[var(--color-muted)] mb-3">Recent sessions</h2>
+						<div class="space-y-3">
+							{#each completedWorkouts as workout}
+								<button
+									onclick={() => goto(`/workout/${workout.id}`)}
+									class="w-full fitness-card text-left hover:scale-[1.02] transition-transform"
+								>
+									<div class="flex items-start justify-between">
+										<div class="flex-1">
+											<div class="flex items-center gap-2 mb-2">
+												<Calendar class="w-4 h-4 text-[var(--color-muted)]" />
+												<span class="text-sm text-[var(--color-muted)]">{formatDate(workout.date)}</span>
+											</div>
+											<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-2">
+												{workout.name || 'Workout'}
+											</h3>
+											<div class="flex items-center gap-4 text-sm text-[var(--color-muted)]">
+												{#if workout.exercise_count !== undefined}
+													<div class="flex items-center gap-1">
+														<Activity class="w-4 h-4" />
+														<span>{workout.exercise_count} exercise{workout.exercise_count !== 1 ? 's' : ''}</span>
+													</div>
+												{/if}
+												{#if workout.duration_minutes}
+													<div class="flex items-center gap-1">
+														<Clock class="w-4 h-4" />
+														<span>{workout.duration_minutes} min</span>
+													</div>
+												{/if}
+											</div>
+										</div>
+									</div>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			{/if}
 		{:else}
 			<!-- Exercises View -->

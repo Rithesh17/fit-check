@@ -6,7 +6,7 @@
 	import { workoutTemplates, templateToWorkoutExercises, type WorkoutTemplate } from '$lib/data/workout-templates';
 	import { getRecentExercises } from '$lib/utils/recent-exercises';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
-	import { Search, Plus, X, Play, Check, Activity, Timer, Clock, Info } from 'lucide-svelte';
+	import { Search, Plus, X, Check, Activity, Timer, Clock, Info } from 'lucide-svelte';
 
 	let workoutName = $state('');
 	let selectedExercises = $state<Array<{ exercise: Exercise; sets: Array<{ reps: number; weight: number; rest: number; completed: boolean }> }>>([]);
@@ -201,28 +201,6 @@
 		});
 	}
 
-	function startActiveWorkout() {
-		if (selectedExercises.length === 0) {
-			alert('Please add at least one exercise');
-			return;
-		}
-
-		// Save workout data to sessionStorage
-		const workoutData = {
-			name: workoutName || 'Workout',
-			notes: workoutNotes,
-			energyLevel: energyLevel,
-			mood: mood,
-			exercises: selectedExercises.map((ex) => ({
-				exerciseId: ex.exercise.id,
-				sets: ex.sets
-			}))
-		};
-
-		sessionStorage.setItem('activeWorkout', JSON.stringify(workoutData));
-		goto('/workout/active');
-	}
-
 	async function saveWorkout() {
 		if (selectedExercises.length === 0) {
 			alert('Please add at least one exercise');
@@ -231,44 +209,38 @@
 
 		isLoading = true;
 		try {
-			// Create workout
-			const { data: workout, error: workoutError } = await supabase
-				.from('workouts')
+			// Save as template only (does not record as workout done for the day)
+			const { data: template, error: templateError } = await supabase
+				.from('workout_templates')
 				.insert({
-					name: workoutName || 'Workout',
-					date: new Date().toISOString(),
-					notes: workoutNotes || null,
-					energy_level: energyLevel,
-					mood: mood || null
+					name: workoutName || 'Workout'
 				})
 				.select()
 				.single();
 
-			if (workoutError) throw workoutError;
+			if (templateError) throw templateError;
 
-			// Create workout exercises
-			const workoutExercises = selectedExercises.map((ex, index) => ({
-				workout_id: workout.id,
+			const templateExercises = selectedExercises.map((ex, index) => ({
+				workout_template_id: template.id,
 				exercise_id: ex.exercise.id,
 				exercise_order: index,
 				sets: ex.sets.map((set) => ({
 					reps: set.reps,
 					weight: set.weight,
-					rest: set.rest,
-					completed: set.completed
+					rest: set.rest
 				}))
 			}));
 
 			const { error: exercisesError } = await supabase
-				.from('workout_exercises')
-				.insert(workoutExercises);
+				.from('workout_template_exercises')
+				.insert(templateExercises);
 
 			if (exercisesError) throw exercisesError;
 
-			// Redirect to dashboard
-			goto('/');
+			// Redirect to workouts page so user can start it or create another
+			goto('/workouts');
 		} catch (error) {
-			console.error('Error saving workout:', error);
+			console.error('Error saving workout template:', error);
 			alert('Failed to save workout. Please try again.');
 		} finally {
 			isLoading = false;
@@ -290,16 +262,6 @@
 				</a>
 				<h1 class="text-xl font-bold text-[var(--color-foreground)] flex-1 text-center">New Workout</h1>
 				<div class="flex gap-2 flex-shrink-0">
-					{#if !showTemplates && selectedExercises.length > 0}
-						<button
-							onclick={startActiveWorkout}
-							class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform flex items-center gap-2"
-							title="Start active workout with timer"
-						>
-							<Play class="w-4 h-4" />
-							Start
-						</button>
-					{/if}
 					<button
 						onclick={saveWorkout}
 						disabled={isLoading || selectedExercises.length === 0}
@@ -365,7 +327,7 @@
 				>
 					{selectedTemplates.size === 0
 						? 'Select a Template'
-						: `Start Workout (${selectedTemplates.size} ${selectedTemplates.size === 1 ? 'template' : 'templates'})`}
+						: `Add to Workout (${selectedTemplates.size} ${selectedTemplates.size === 1 ? 'template' : 'templates'})`}
 				</button>
 
 				<button
@@ -451,24 +413,14 @@
 					<h2 class="text-lg font-semibold text-[var(--color-foreground)]">
 						Exercises ({selectedExercises.length})
 					</h2>
-					<div class="flex items-center gap-3">
+					{#if selectedExercises.length > 1}
 						<button
-							onclick={startActiveWorkout}
-							class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform flex items-center gap-2 text-sm"
-							title="Start active workout with timer"
+							onclick={clearAllExercises}
+							class="text-sm text-[var(--color-muted)] hover:text-[var(--color-danger)] font-medium"
 						>
-							<Play class="w-4 h-4" />
-							Start Workout
+							Clear All
 						</button>
-						{#if selectedExercises.length > 1}
-							<button
-								onclick={clearAllExercises}
-								class="text-sm text-[var(--color-muted)] hover:text-[var(--color-danger)] font-medium"
-							>
-								Clear All
-							</button>
-						{/if}
-					</div>
+					{/if}
 				</div>
 				{#each selectedExercises as { exercise, sets }, exerciseIndex}
 					<div class="fitness-card">
