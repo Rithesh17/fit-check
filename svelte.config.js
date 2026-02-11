@@ -1,21 +1,13 @@
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import { mdsvex } from 'mdsvex';
 import path from 'path';
-import rehypeSlug from 'rehype-slug';
-import remarkGfm from 'remark-gfm';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-  extensions: ['.svelte', '.mdx'],
+  extensions: ['.svelte'],
 
   preprocess: [
-    vitePreprocess(),
-    mdsvex({
-      extensions: ['.mdx'],
-      remarkPlugins: [remarkGfm],
-      rehypePlugins: [rehypeSlug]
-    })
+    vitePreprocess()
   ],
 
   kit: {
