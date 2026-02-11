@@ -10,7 +10,7 @@
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "postbuild": "node scripts/generate-seo-files.js && node scripts/run-pagefind.js && node scripts/generate-rss-feed.js",
+    "postbuild": "node scripts/generate-seo-files.js && node scripts/run-pagefind.js",
     "setup": "node postinstall.js"
   },
   "devDependencies": {
@@ -45,7 +45,6 @@
     "vitest": "^3.2.0"
   },
   "dependencies": {
-    "statue-ssg": "file:../statue/statue-ssg-0.2.15.tgz",
     "@supabase/supabase-js": "^2.39.0",
     "chart.js": "^4.4.0",
     "chartjs-adapter-date-fns": "^3.0.0",
