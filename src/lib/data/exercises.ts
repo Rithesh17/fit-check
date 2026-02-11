@@ -14,6 +14,7 @@ export interface Exercise {
 	defaultRestSeconds: number;
 	instructions: string;
 	imageUrl?: string;
+	videoUrl?: string; // YouTube video URL for exercise demonstration
 }
 
 export const exercises: Exercise[] = [
@@ -78,6 +79,28 @@ export const exercises: Exercise[] = [
 		defaultRestSeconds: 60,
 		instructions: 'Cross arms at bottom, squeeze chest'
 	},
+	{
+		id: 'dumbbell-bench-press',
+		name: 'Dumbbell Bench Press',
+		muscleGroups: ['chest', 'triceps', 'shoulders'],
+		equipment: 'Dumbbells',
+		defaultSets: 4,
+		defaultReps: 8,
+		defaultRestSeconds: 120,
+		instructions: 'Lower dumbbells to chest, press up explosively',
+		videoUrl: 'https://www.youtube.com/watch?v=O7ECGhZj_Hc'
+	},
+	{
+		id: 'incline-dumbbell-bench-press',
+		name: 'Incline Dumbbell Bench Press',
+		muscleGroups: ['chest', 'triceps', 'shoulders'],
+		equipment: 'Dumbbells',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 90,
+		instructions: 'Bench at 30-45° angle, press dumbbells from upper chest',
+		videoUrl: 'https://www.youtube.com/watch?v=qSmo-8QapTg'
+	},
 
 	// BACK EXERCISES
 	{
@@ -141,6 +164,16 @@ export const exercises: Exercise[] = [
 		instructions: 'Pull to lower chest, squeeze lats'
 	},
 	{
+		id: 'one-arm-dumbbell-row',
+		name: 'One-Arm Dumbbell Row',
+		muscleGroups: ['back', 'biceps'],
+		equipment: 'Dumbbells',
+		defaultSets: 4,
+		defaultReps: 8,
+		defaultRestSeconds: 90,
+		instructions: 'Bent over, pull dumbbell to hip, each side'
+	},
+	{
 		id: 'face-pulls',
 		name: 'Face Pulls',
 		muscleGroups: ['back', 'shoulders'],
@@ -170,7 +203,8 @@ export const exercises: Exercise[] = [
 		defaultSets: 3,
 		defaultReps: 10,
 		defaultRestSeconds: 90,
-		instructions: 'Press up and slightly forward, full range'
+		instructions: 'Press up and slightly forward, full range',
+		videoUrl: 'https://youtu.be/0JfYxMRsUCQ?si=zPg-sDFum_lMsuzz'
 	},
 	{
 		id: 'lateral-raises',
@@ -180,7 +214,8 @@ export const exercises: Exercise[] = [
 		defaultSets: 3,
 		defaultReps: 15,
 		defaultRestSeconds: 60,
-		instructions: 'Raise to shoulder height, slight lean forward'
+		instructions: 'Raise to shoulder height, slight lean forward',
+		videoUrl: 'https://youtu.be/XPPfnSEATJA?si=Kw5hEZGSSqiD02FB'
 	},
 	{
 		id: 'rear-delt-flyes',
@@ -191,6 +226,16 @@ export const exercises: Exercise[] = [
 		defaultReps: 12,
 		defaultRestSeconds: 60,
 		instructions: 'Bent over, raise arms wide, squeeze rear delts'
+	},
+	{
+		id: 'rear-delt-fly',
+		name: 'Rear Delt Fly',
+		muscleGroups: ['shoulders'],
+		equipment: 'Dumbbells',
+		defaultSets: 3,
+		defaultReps: 15,
+		defaultRestSeconds: 60,
+		instructions: 'Bent over, raise arms wide, target rear delts'
 	},
 	{
 		id: 'arnold-press',
@@ -306,6 +351,17 @@ export const exercises: Exercise[] = [
 		defaultRestSeconds: 60,
 		instructions: 'Lower to forehead, extend fully'
 	},
+	{
+		id: 'dumbbell-skull-crushers',
+		name: 'Dumbbell Skull Crushers',
+		muscleGroups: ['triceps'],
+		equipment: 'Dumbbells',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 90,
+		instructions: 'Lower dumbbells to forehead, extend elbows',
+		videoUrl: 'https://youtu.be/N5ImCU0mcpo?si=L2ShX2DFzPF0FmZw'
+	},
 
 	// LEG EXERCISES - QUADRICEPS
 	{
@@ -317,6 +373,27 @@ export const exercises: Exercise[] = [
 		defaultReps: 8,
 		defaultRestSeconds: 180,
 		instructions: 'Depth to parallel, drive through heels, chest up'
+	},
+	{
+		id: 'goblet-squat',
+		name: 'Goblet Squat',
+		muscleGroups: ['quadriceps', 'glutes', 'core'],
+		equipment: 'Dumbbells',
+		defaultSets: 4,
+		defaultReps: 8,
+		defaultRestSeconds: 120,
+		instructions: 'Hold dumbbell at chest, squat deep, keep chest up',
+		videoUrl: 'https://www.youtube.com/watch?v=Xjo_fY9Hl9w'
+	},
+	{
+		id: 'dumbbell-front-squat',
+		name: 'Dumbbell Front Squat',
+		muscleGroups: ['quadriceps', 'glutes', 'core'],
+		equipment: 'Dumbbells',
+		defaultSets: 3,
+		defaultReps: 8,
+		defaultRestSeconds: 90,
+		instructions: 'Hold dumbbells at shoulders, squat with upright torso'
 	},
 	{
 		id: 'front-squat',
@@ -379,6 +456,16 @@ export const exercises: Exercise[] = [
 		defaultReps: 10,
 		defaultRestSeconds: 120,
 		instructions: 'Hinge at hips, feel hamstring stretch'
+	},
+	{
+		id: 'dumbbell-romanian-deadlift',
+		name: 'Dumbbell Romanian Deadlift',
+		muscleGroups: ['hamstrings', 'glutes', 'back'],
+		equipment: 'Dumbbells',
+		defaultSets: 4,
+		defaultReps: 8,
+		defaultRestSeconds: 120,
+		instructions: 'Hinge at hips with dumbbells, stretch hamstrings'
 	},
 	{
 		id: 'leg-curl',
@@ -536,6 +623,126 @@ export const exercises: Exercise[] = [
 		defaultRestSeconds: 90,
 		instructions: 'Hang from bar, raise legs to parallel'
 	},
+	{
+		id: 'hanging-knee-raises',
+		name: 'Hanging Knee Raises',
+		muscleGroups: ['core'],
+		equipment: 'Pull-up Bar',
+		defaultSets: 3,
+		defaultReps: 15,
+		defaultRestSeconds: 90,
+		instructions: 'Hang from bar, raise knees to chest'
+	},
+	{
+		id: 'dead-bug',
+		name: 'Dead Bug',
+		muscleGroups: ['core'],
+		equipment: 'Bodyweight',
+		defaultSets: 3,
+		defaultReps: 1,
+		defaultRestSeconds: 60,
+		instructions: 'Lie on back, alternate arm and leg extensions, hold 30-45 seconds'
+	},
+	{
+		id: 'hollow-hold',
+		name: 'Hollow Hold',
+		muscleGroups: ['core'],
+		equipment: 'Bodyweight',
+		defaultSets: 3,
+		defaultReps: 1,
+		defaultRestSeconds: 60,
+		instructions: 'Lie on back, lift shoulders and legs, hold 30-45 seconds'
+	},
+	{
+		id: 'back-extension',
+		name: 'Back Extension',
+		muscleGroups: ['back', 'glutes', 'hamstrings'],
+		equipment: 'Back Extension Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 90,
+		instructions: 'Hinge at hips, extend back against resistance'
+	},
+	{
+		id: 'reverse-hyper',
+		name: 'Reverse Hyper',
+		muscleGroups: ['glutes', 'hamstrings', 'back'],
+		equipment: 'Reverse Hyper Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 90,
+		instructions: 'Lying face down, raise legs behind body'
+	},
+	{
+		id: 'cable-woodchoppers',
+		name: 'Cable Woodchoppers',
+		muscleGroups: ['core', 'obliques'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 60,
+		instructions: 'Pull cable diagonally across body, each side'
+	},
+	{
+		id: 'hanging-knee-raises',
+		name: 'Hanging Knee Raises',
+		muscleGroups: ['core'],
+		equipment: 'Pull-up Bar',
+		defaultSets: 3,
+		defaultReps: 15,
+		defaultRestSeconds: 90,
+		instructions: 'Hang from bar, raise knees to chest'
+	},
+	{
+		id: 'dead-bug',
+		name: 'Dead Bug',
+		muscleGroups: ['core'],
+		equipment: 'Bodyweight',
+		defaultSets: 3,
+		defaultReps: 1,
+		defaultRestSeconds: 60,
+		instructions: 'Lie on back, alternate arm and leg extensions, hold 30-45 seconds'
+	},
+	{
+		id: 'hollow-hold',
+		name: 'Hollow Hold',
+		muscleGroups: ['core'],
+		equipment: 'Bodyweight',
+		defaultSets: 3,
+		defaultReps: 1,
+		defaultRestSeconds: 60,
+		instructions: 'Lie on back, lift shoulders and legs, hold 30-45 seconds'
+	},
+	{
+		id: 'back-extension',
+		name: 'Back Extension',
+		muscleGroups: ['back', 'glutes', 'hamstrings'],
+		equipment: 'Back Extension Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 90,
+		instructions: 'Hinge at hips, extend back against resistance'
+	},
+	{
+		id: 'reverse-hyper',
+		name: 'Reverse Hyper',
+		muscleGroups: ['glutes', 'hamstrings', 'back'],
+		equipment: 'Reverse Hyper Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 90,
+		instructions: 'Lying face down, raise legs behind body'
+	},
+	{
+		id: 'cable-woodchoppers',
+		name: 'Cable Woodchoppers',
+		muscleGroups: ['core', 'obliques'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 60,
+		instructions: 'Pull cable diagonally across body, each side'
+	},
 
 	// FOREARMS
 	{
@@ -665,4 +872,21 @@ export function searchExercises(query: string): Exercise[] {
 
 export function getExerciseById(id: string): Exercise | undefined {
 	return exercises.find((ex) => ex.id === id);
+}
+
+/**
+ * Get exercise by ID with override merged (async)
+ * Use this when you need the user's customized version
+ */
+export async function getExerciseByIdWithOverride(
+	id: string
+): Promise<Exercise | undefined> {
+	const exercise = getExerciseById(id);
+	if (!exercise) return undefined;
+
+	const { mergeExerciseWithOverride, getExerciseOverride } = await import(
+		'$lib/utils/exercise-overrides'
+	);
+	const override = await getExerciseOverride(id);
+	return mergeExerciseWithOverride(exercise, override);
 }

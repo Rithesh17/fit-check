@@ -20,6 +20,7 @@ export interface Database {
 					default_rest_seconds: number;
 					instructions: string | null;
 					image_url: string | null;
+					video_url: string | null;
 					created_at: string;
 				};
 				Insert: {
@@ -32,6 +33,7 @@ export interface Database {
 					default_rest_seconds?: number;
 					instructions?: string | null;
 					image_url?: string | null;
+					video_url?: string | null;
 					created_at?: string;
 				};
 				Update: {
@@ -44,6 +46,7 @@ export interface Database {
 					default_rest_seconds?: number;
 					instructions?: string | null;
 					image_url?: string | null;
+					video_url?: string | null;
 					created_at?: string;
 				};
 			};
@@ -54,6 +57,8 @@ export interface Database {
 					date: string;
 					duration_minutes: number | null;
 					notes: string | null;
+					energy_level: number | null;
+					mood: string | null;
 					created_at: string;
 					updated_at: string;
 				};
@@ -63,6 +68,8 @@ export interface Database {
 					date?: string;
 					duration_minutes?: number | null;
 					notes?: string | null;
+					energy_level?: number | null;
+					mood?: string | null;
 					created_at?: string;
 					updated_at?: string;
 				};
@@ -72,6 +79,8 @@ export interface Database {
 					date?: string;
 					duration_minutes?: number | null;
 					notes?: string | null;
+					energy_level?: number | null;
+					mood?: string | null;
 					created_at?: string;
 					updated_at?: string;
 				};
@@ -84,6 +93,7 @@ export interface Database {
 					exercise_order: number;
 					sets: Json;
 					notes: string | null;
+					rpe: number | null;
 					created_at: string;
 				};
 				Insert: {
@@ -93,6 +103,7 @@ export interface Database {
 					exercise_order: number;
 					sets: Json;
 					notes?: string | null;
+					rpe?: number | null;
 					created_at?: string;
 				};
 				Update: {
@@ -102,7 +113,43 @@ export interface Database {
 					exercise_order?: number;
 					sets?: Json;
 					notes?: string | null;
+					rpe?: number | null;
 					created_at?: string;
+				};
+			};
+			user_exercise_overrides: {
+				Row: {
+					id: string;
+					exercise_id: string;
+					default_sets: number | null;
+					default_reps: number | null;
+					default_rest_seconds: number | null;
+					instructions: string | null;
+					video_url: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					exercise_id: string;
+					default_sets?: number | null;
+					default_reps?: number | null;
+					default_rest_seconds?: number | null;
+					instructions?: string | null;
+					video_url?: string | null;
+					created_at?: string;
+					updated_at?: string;
+				};
+				Update: {
+					id?: string;
+					exercise_id?: string;
+					default_sets?: number | null;
+					default_reps?: number | null;
+					default_rest_seconds?: number | null;
+					instructions?: string | null;
+					video_url?: string | null;
+					created_at?: string;
+					updated_at?: string;
 				};
 			};
 			body_metrics: {

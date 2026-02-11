@@ -4,11 +4,11 @@
 	import { supabase } from '$lib/supabase/client';
 	import { exercises, getExerciseById, type Exercise } from '$lib/data/exercises';
 	import RestTimer from '$lib/components/RestTimer.svelte';
-	import { Check, X, Play, Pause, SkipForward, Info, Clock } from 'lucide-svelte';
+	import { Check, X, Play, Pause, SkipForward, Info, Clock, Edit2 } from 'lucide-svelte';
 
 	type WorkoutExercise = {
 		exercise: Exercise;
-		sets: Array<{ reps: number; weight: number; rest: number; completed: boolean }>;
+		sets: Array<{ reps: number; weight: number; rest: number; completed: boolean; notes?: string }>;
 	};
 
 	let workoutName = $state('');
@@ -20,7 +20,12 @@
 	let durationInterval: ReturnType<typeof setInterval> | null = $state(null);
 	let showRestTimer = $state(false);
 	let showInstructions = $state(false);
+	let showSetNotes = $state(false);
 	let isSaving = $state(false);
+	let workoutNotes = $state('');
+	let energyLevel = $state<number | null>(null);
+	let mood = $state<string>('');
+	let currentSetNotes = $state('');
 
 	const currentExercise = $derived(
 		selectedExercises[currentExerciseIndex]?.exercise || null
@@ -39,9 +44,15 @@
 			try {
 				const data = JSON.parse(savedWorkout);
 				workoutName = data.name || 'Workout';
+				workoutNotes = data.notes || '';
+				energyLevel = data.energyLevel || null;
+				mood = data.mood || '';
 				selectedExercises = data.exercises.map((ex: any) => ({
 					exercise: getExerciseById(ex.exerciseId),
-					sets: ex.sets
+					sets: ex.sets.map((set: any) => ({
+						...set,
+						notes: set.notes || ''
+					}))
 				})).filter((ex: any) => ex.exercise); // Filter out any invalid exercises
 				
 				if (selectedExercises.length === 0) {
@@ -93,23 +104,15 @@
 	function completeSet() {
 		if (!currentSet) return;
 
-		// Mark set as completed
-		selectedExercises = selectedExercises.map((ex, exIdx) => {
-			if (exIdx === currentExerciseIndex) {
-				return {
-					...ex,
-					sets: ex.sets.map((set, setIdx) => {
-						if (setIdx === currentSetIndex) {
-							return { ...set, completed: true };
-						}
-						return set;
-					})
-				};
-			}
-			return ex;
-		});
+		// Save set notes if any
+		if (currentSetNotes) {
+			updateSetValue('notes', currentSetNotes);
+		}
 
-		// Show rest timer if there's a next set
+		// Mark set as completed
+		updateSetValue('completed', true);
+
+		// Show rest timer if there's a next set (auto-start)
 		const nextSetIndex = currentSetIndex + 1;
 		if (nextSetIndex < selectedExercises[currentExerciseIndex].sets.length) {
 			showRestTimer = true;
@@ -142,7 +145,7 @@
 		moveToNextExercise();
 	}
 
-	function updateSetValue(field: 'reps' | 'weight', value: number) {
+	function updateSetValue(field: 'reps' | 'weight' | 'notes' | 'completed', value: number | string | boolean) {
 		selectedExercises = selectedExercises.map((ex, exIdx) => {
 			if (exIdx === currentExerciseIndex) {
 				return {
@@ -175,7 +178,10 @@
 				.insert({
 					name: workoutName || 'Workout',
 					date: workoutStartTime?.toISOString() || new Date().toISOString(),
-					duration_minutes: durationMinutes
+					duration_minutes: durationMinutes,
+					notes: workoutNotes || null,
+					energy_level: energyLevel,
+					mood: mood || null
 				})
 				.select()
 				.single();
@@ -191,7 +197,8 @@
 					reps: set.reps,
 					weight: set.weight,
 					rest: set.rest,
-					completed: set.completed
+					completed: set.completed,
+					notes: set.notes || null
 				}))
 			}));
 
@@ -256,6 +263,9 @@
 				duration={currentSet.rest}
 				onComplete={handleRestComplete}
 				onSkip={skipRest}
+				autoStart={true}
+				soundEnabled={true}
+				vibrationEnabled={true}
 			/>
 		{/if}
 
@@ -324,14 +334,80 @@
 							<label for="weight-input" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
 								Weight (kg)
 							</label>
-							<input
-								id="weight-input"
-								type="number"
-								step="0.5"
-								value={currentSet.weight}
-								oninput={(e) => updateSetValue('weight', parseFloat(e.target.value) || 0)}
-								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-center text-2xl font-bold focus:outline-none focus:border-[var(--color-primary)]"
-							/>
+							<div class="relative">
+								<input
+									id="weight-input"
+									type="number"
+									step="0.5"
+									value={currentSet.weight}
+									oninput={(e) => updateSetValue('weight', parseFloat(e.target.value) || 0)}
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-center text-2xl font-bold focus:outline-none focus:border-[var(--color-primary)]"
+								/>
+								<!-- Quick Weight Buttons -->
+								<div class="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1">
+									<button
+										onclick={() => updateSetValue('weight', currentSet.weight + 2.5)}
+										class="w-8 h-6 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded hover:bg-[var(--color-primary)]/30 transition-colors"
+										title="+2.5kg"
+									>
+										+2.5
+									</button>
+									<button
+										onclick={() => updateSetValue('weight', Math.max(0, currentSet.weight - 2.5))}
+										class="w-8 h-6 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded hover:bg-[var(--color-primary)]/30 transition-colors"
+										title="-2.5kg"
+									>
+										-2.5
+									</button>
+								</div>
+							</div>
+							<!-- Quick Weight Buttons Row -->
+							<div class="flex gap-2 mt-2">
+								<button
+									onclick={() => updateSetValue('weight', currentSet.weight + 5)}
+									class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+								>
+									+5kg
+								</button>
+								<button
+									onclick={() => updateSetValue('weight', currentSet.weight + 10)}
+									class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+								>
+									+10kg
+								</button>
+								<button
+									onclick={() => updateSetValue('weight', Math.max(0, currentSet.weight - 5))}
+									class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+								>
+									-5kg
+								</button>
+							</div>
+						</div>
+
+						<!-- Set Notes -->
+						<div>
+							<div class="flex items-center justify-between mb-2">
+								<label for="set-notes" class="block text-sm font-semibold text-[var(--color-muted)]">
+									Set Notes (Optional)
+								</label>
+								<button
+									onclick={() => (showSetNotes = !showSetNotes)}
+									class="p-1 text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors"
+									title={showSetNotes ? 'Hide notes' : 'Show notes'}
+								>
+									<Edit2 class="w-4 h-4" />
+								</button>
+							</div>
+							{#if showSetNotes}
+								<textarea
+									id="set-notes"
+									bind:value={currentSetNotes}
+									onblur={() => updateSetValue('notes', currentSetNotes)}
+									placeholder="Add notes about this set (form, difficulty, etc.)"
+									rows="2"
+									class="w-full px-3 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-sm focus:outline-none focus:border-[var(--color-primary)] resize-none"
+								></textarea>
+							{/if}
 						</div>
 
 						<!-- Complete Set Button -->

@@ -5,7 +5,8 @@
 	import { exercises, getExerciseById, type Exercise } from '$lib/data/exercises';
 	import { workoutTemplates, templateToWorkoutExercises, type WorkoutTemplate } from '$lib/data/workout-templates';
 	import { getRecentExercises } from '$lib/utils/recent-exercises';
-	import { Search, Plus, X, Play, Check, Activity, Timer, Clock } from 'lucide-svelte';
+	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
+	import { Search, Plus, X, Play, Check, Activity, Timer, Clock, Info } from 'lucide-svelte';
 
 	let workoutName = $state('');
 	let selectedExercises = $state<Array<{ exercise: Exercise; sets: Array<{ reps: number; weight: number; rest: number; completed: boolean }> }>>([]);
@@ -17,6 +18,10 @@
 	let searchInputElement: HTMLInputElement | null = $state(null);
 	let recentExercises = $state<Array<{ exerciseId: string; exerciseName: string; lastUsed: Date; useCount: number }>>([]);
 	let showRecentExercises = $state(false);
+	let selectedExerciseDetail = $state<Exercise | null>(null);
+	let workoutNotes = $state('');
+	let energyLevel = $state<number | null>(null);
+	let mood = $state<string>('');
 
 	// Focus search input when modal opens
 	$effect(() => {
@@ -205,6 +210,9 @@
 		// Save workout data to sessionStorage
 		const workoutData = {
 			name: workoutName || 'Workout',
+			notes: workoutNotes,
+			energyLevel: energyLevel,
+			mood: mood,
 			exercises: selectedExercises.map((ex) => ({
 				exerciseId: ex.exercise.id,
 				sets: ex.sets
@@ -228,7 +236,10 @@
 				.from('workouts')
 				.insert({
 					name: workoutName || 'Workout',
-					date: new Date().toISOString()
+					date: new Date().toISOString(),
+					notes: workoutNotes || null,
+					energy_level: energyLevel,
+					mood: mood || null
 				})
 				.select()
 				.single();
@@ -272,29 +283,31 @@
 <div class="min-h-screen bg-[var(--color-background)] pb-20">
 	<!-- Header -->
 	<div class="sticky top-0 z-20 bg-[var(--color-background)]/95 backdrop-blur-sm border-b border-[var(--color-border)]">
-		<div class="max-w-md mx-auto px-4 py-4 flex items-center justify-between">
-			<a href="/" class="text-[var(--color-muted)] hover:text-[var(--color-foreground)]">
-				<X class="w-6 h-6" />
-			</a>
-			<h1 class="text-xl font-bold text-[var(--color-foreground)]">New Workout</h1>
-			<div class="flex gap-2">
-				{#if !showTemplates && selectedExercises.length > 0}
+		<div class="max-w-md mx-auto px-4 py-4">
+			<div class="flex items-center justify-between gap-2">
+				<a href="/" class="text-[var(--color-muted)] hover:text-[var(--color-foreground)] flex-shrink-0">
+					<X class="w-6 h-6" />
+				</a>
+				<h1 class="text-xl font-bold text-[var(--color-foreground)] flex-1 text-center">New Workout</h1>
+				<div class="flex gap-2 flex-shrink-0">
+					{#if !showTemplates && selectedExercises.length > 0}
+						<button
+							onclick={startActiveWorkout}
+							class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform flex items-center gap-2"
+							title="Start active workout with timer"
+						>
+							<Play class="w-4 h-4" />
+							Start
+						</button>
+					{/if}
 					<button
-						onclick={startActiveWorkout}
-						class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform flex items-center gap-2"
-						title="Start active workout with timer"
+						onclick={saveWorkout}
+						disabled={isLoading || selectedExercises.length === 0}
+						class="px-4 py-2 bg-[var(--gradient-primary)] text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
 					>
-						<Play class="w-4 h-4" />
-						Start
+						{isLoading ? 'Saving...' : 'Save'}
 					</button>
-				{/if}
-				<button
-					onclick={saveWorkout}
-					disabled={isLoading || selectedExercises.length === 0}
-					class="px-4 py-2 bg-[var(--gradient-primary)] text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-				>
-					{isLoading ? 'Saving...' : 'Save'}
-				</button>
+				</div>
 			</div>
 		</div>
 	</div>
@@ -460,8 +473,11 @@
 				{#each selectedExercises as { exercise, sets }, exerciseIndex}
 					<div class="fitness-card">
 						<div class="flex items-start justify-between mb-4">
-							<div class="flex-1">
-								<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-1">
+							<button
+								onclick={() => (selectedExerciseDetail = exercise)}
+								class="flex-1 text-left"
+							>
+								<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-1 hover:text-[var(--color-primary)] transition-colors">
 									{exercise.name}
 								</h3>
 								<div class="flex flex-wrap gap-2 mt-2">
@@ -471,21 +487,30 @@
 										</span>
 									{/each}
 								</div>
-							</div>
-							<button
-								onclick={() => removeExercise(exerciseIndex)}
-								class="p-2 text-[var(--color-muted)] hover:text-[var(--color-danger)] transition-colors"
-								title="Remove exercise"
-							>
-								<X class="w-5 h-5" />
 							</button>
+							<div class="flex items-center gap-2">
+								<button
+									onclick={() => (selectedExerciseDetail = exercise)}
+									class="p-2 text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors"
+									title="View details"
+								>
+									<Info class="w-5 h-5" />
+								</button>
+								<button
+									onclick={() => removeExercise(exerciseIndex)}
+									class="p-2 text-[var(--color-muted)] hover:text-[var(--color-danger)] transition-colors"
+									title="Remove exercise"
+								>
+									<X class="w-5 h-5" />
+								</button>
+							</div>
 						</div>
 
 						<!-- Sets -->
 						<div class="space-y-3">
 							{#each sets as set, setIndex}
 								<div
-									class="flex items-center gap-2 p-3 rounded-lg {set.completed
+									class="flex items-center gap-3 p-3 rounded-lg {set.completed
 										? 'bg-[var(--color-accent)]/20 border border-[var(--color-accent)]/50'
 										: 'bg-[var(--color-card-hover)] border border-[var(--color-border)]'}"
 								>
@@ -499,23 +524,23 @@
 											<Check class="w-4 h-4 text-[var(--color-on-primary)]" />
 										{/if}
 									</button>
-									<span class="text-sm text-[var(--color-muted)] w-8">Set {setIndex + 1}</span>
+									<span class="text-sm text-[var(--color-muted)] w-14 flex-shrink-0 text-left">Set {setIndex + 1}</span>
 									<input
 										type="number"
 										value={set.reps}
 										oninput={(e) => updateSet(exerciseIndex, setIndex, 'reps', parseInt(e.target.value) || 0)}
-										class="flex-1 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+										class="flex-1 min-w-0 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
 										placeholder="Reps"
 									/>
-									<span class="text-[var(--color-muted)]">×</span>
+									<span class="text-[var(--color-muted)] flex-shrink-0">×</span>
 									<input
 										type="number"
 										value={set.weight}
 										oninput={(e) => updateSet(exerciseIndex, setIndex, 'weight', parseFloat(e.target.value) || 0)}
-										class="flex-1 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+										class="flex-1 min-w-0 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
 										placeholder="Weight"
 									/>
-									<span class="text-[var(--color-muted)] text-sm">kg</span>
+									<span class="text-[var(--color-muted)] text-sm flex-shrink-0">kg</span>
 								</div>
 							{/each}
 							<button
@@ -575,36 +600,58 @@
 				<div class="flex-1 overflow-y-auto">
 					<div class="p-4 space-y-2">
 						{#each filteredExercises as exercise}
-							<button
-								onclick={() => addExercise(exercise)}
-								disabled={selectedExercises.some((e) => e.exercise.id === exercise.id)}
-								class="w-full p-4 text-left fitness-card hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								<div class="flex items-start justify-between">
-									<div class="flex-1">
-										<h3 class="font-semibold text-[var(--color-foreground)] mb-1">
-											{exercise.name}
-										</h3>
-										<p class="text-sm text-[var(--color-muted)] mb-2">{exercise.equipment}</p>
-										<div class="flex flex-wrap gap-1">
-											{#each exercise.muscleGroups.slice(0, 3) as mg}
-												<span class="px-2 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-xs rounded">
-													{mg}
-												</span>
-											{/each}
+							<div class="flex items-center gap-2">
+								<button
+									onclick={() => addExercise(exercise)}
+									disabled={selectedExercises.some((e) => e.exercise.id === exercise.id)}
+									class="flex-1 p-4 text-left fitness-card hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									<div class="flex items-start justify-between">
+										<div class="flex-1">
+											<h3 class="font-semibold text-[var(--color-foreground)] mb-1">
+												{exercise.name}
+											</h3>
+											<p class="text-sm text-[var(--color-muted)] mb-2">{exercise.equipment}</p>
+											<div class="flex flex-wrap gap-1">
+												{#each exercise.muscleGroups.slice(0, 3) as mg}
+													<span class="px-2 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-xs rounded">
+														{mg}
+													</span>
+												{/each}
+											</div>
 										</div>
+										{#if selectedExercises.some((e) => e.exercise.id === exercise.id)}
+											<Check class="w-5 h-5 text-[var(--color-accent)] flex-shrink-0 ml-2" />
+										{/if}
 									</div>
-									{#if selectedExercises.some((e) => e.exercise.id === exercise.id)}
-										<Check class="w-5 h-5 text-[var(--color-accent)] flex-shrink-0 ml-2" />
-									{/if}
-								</div>
-							</button>
+								</button>
+								<button
+									onclick={(e) => {
+										e.stopPropagation();
+										selectedExerciseDetail = exercise;
+									}}
+									class="p-3 text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors"
+									title="View details"
+								>
+									<Info class="w-5 h-5" />
+								</button>
+							</div>
 						{/each}
 					</div>
 				</div>
 			</div>
 		</div>
 	{/if}
+
+	<!-- Exercise Detail Modal -->
+	<ExerciseDetail
+		exercise={selectedExerciseDetail}
+		onClose={() => (selectedExerciseDetail = null)}
+		onEdit={(exercise) => {
+			selectedExerciseDetail = null;
+			// Could open editor here if needed
+		}}
+	/>
 </div>
 
 <style>

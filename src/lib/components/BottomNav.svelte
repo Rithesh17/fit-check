@@ -8,7 +8,7 @@
 		{ path: '/progress', label: 'Progress', icon: TrendingUp },
 		{ path: '/profile', label: 'Profile', icon: User }
 	];
-	
+
 	function isActive(path: string, currentPathname: string): boolean {
 		if (path === '/') {
 			// Home should only be active on exact match
