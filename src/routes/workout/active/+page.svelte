@@ -27,7 +27,8 @@
 	let energyLevel = $state<number | null>(null);
 	let mood = $state<string>('');
 	let currentSetNotes = $state('');
-	let restDurationBetweenExercises = $state(0); // Rest time between exercises (in seconds)
+	let restDurationBetweenExercises = $state(90); // Rest time between exercises (in seconds) - default 90 seconds
+	let isRestBetweenExercises = $state(false); // Track if we're showing rest between exercises vs sets
 	let showExerciseDetail = $state(false);
 	let cardioTimerSeconds = $state(0);
 	let cardioTimerInterval: ReturnType<typeof setInterval> | null = $state(null);
@@ -103,6 +104,7 @@
 				workoutNotes = data.notes || '';
 				energyLevel = data.energyLevel || null;
 				mood = data.mood || '';
+				restDurationBetweenExercises = data.restDurationBetweenExercises || 90; // Default 90 seconds
 				selectedExercises = data.exercises.map((ex: any): WorkoutExercise | null => {
 					const exercise = getExerciseById(ex.exerciseId) || customExercises.find(ce => ce.id === ex.exerciseId);
 					if (!exercise) return null;
@@ -274,26 +276,31 @@
 
 	function moveToNextExercise() {
 		showRestTimer = false;
+		isRestBetweenExercises = false;
 		const currentEx = currentExerciseData;
 		
 		if (currentEx && (currentEx.exerciseType === 'weights' || currentEx.exerciseType === 'bodyweight')) {
-			const nextSetIndex = currentSetIndex + 1;
+			// Check if all sets in current exercise are completed
+			const allSetsCompleted = currentEx.sets.every(set => set.completed);
 			
-			// If there are more sets in current exercise, move to next set
-			if (nextSetIndex < currentEx.sets.length) {
-				currentSetIndex = nextSetIndex;
-				return;
+			// Only move to next exercise if all sets are completed
+			if (!allSetsCompleted) {
+				// Find the first incomplete set and move to it
+				const incompleteSetIndex = currentEx.sets.findIndex(set => !set.completed);
+				if (incompleteSetIndex !== -1) {
+					currentSetIndex = incompleteSetIndex;
+					return;
+				}
 			}
 		}
 
 		// Move to next exercise
 		const nextExerciseIndex = currentExerciseIndex + 1;
 		if (nextExerciseIndex < selectedExercises.length) {
-			// Show rest timer between exercises if there's a rest duration
+			// Show rest timer between exercises
 			if (restDurationBetweenExercises > 0) {
 				showRestTimer = true;
-				// We'll use a dummy set object for the rest timer
-				// The rest timer will call handleRestComplete when done
+				isRestBetweenExercises = true;
 			} else {
 				// No rest, move directly
 				currentExerciseIndex = nextExerciseIndex;
@@ -311,8 +318,27 @@
 
 	function skipRest() {
 		showRestTimer = false;
-		restDurationBetweenExercises = 0;
-		// Move to next exercise
+		
+		// Check if we're skipping rest between exercises
+		if (isRestBetweenExercises) {
+			isRestBetweenExercises = false;
+			handleRestComplete();
+			return;
+		}
+		
+		// Otherwise, we're skipping rest between sets
+		const currentEx = currentExerciseData;
+		if (currentEx && (currentEx.exerciseType === 'weights' || currentEx.exerciseType === 'bodyweight')) {
+			// Check if there are more sets in current exercise
+			const nextSetIndex = currentSetIndex + 1;
+			if (nextSetIndex < currentEx.sets.length) {
+				// Move to next set
+				currentSetIndex = nextSetIndex;
+				return;
+			}
+		}
+		
+		// No more sets, move to next exercise
 		const nextExerciseIndex = currentExerciseIndex + 1;
 		if (nextExerciseIndex < selectedExercises.length) {
 			currentExerciseIndex = nextExerciseIndex;
@@ -455,9 +481,27 @@
 		}
 	}
 
+	function handleSetRestComplete() {
+		showRestTimer = false;
+		isRestBetweenExercises = false;
+		const currentEx = currentExerciseData;
+		
+		if (currentEx && (currentEx.exerciseType === 'weights' || currentEx.exerciseType === 'bodyweight')) {
+			// Move to next set in current exercise
+			const nextSetIndex = currentSetIndex + 1;
+			if (nextSetIndex < currentEx.sets.length) {
+				currentSetIndex = nextSetIndex;
+				return;
+			}
+		}
+		
+		// If no more sets, move to next exercise
+		handleRestComplete();
+	}
+
 	function handleRestComplete() {
 		showRestTimer = false;
-		restDurationBetweenExercises = 0;
+		isRestBetweenExercises = false;
 		// Move to next exercise
 		const nextExerciseIndex = currentExerciseIndex + 1;
 		if (nextExerciseIndex < selectedExercises.length) {
@@ -504,11 +548,21 @@
 	</div>
 
 	<div class="max-w-md mx-auto px-4 py-6 space-y-6">
-		{#if showRestTimer && currentSet}
-			<!-- Rest Timer -->
+		{#if showRestTimer && isRestBetweenExercises}
+			<!-- Rest Timer Between Exercises -->
+			<RestTimer
+				duration={restDurationBetweenExercises}
+				onComplete={handleRestComplete}
+				onSkip={skipRest}
+				autoStart={true}
+				soundEnabled={true}
+				vibrationEnabled={true}
+			/>
+		{:else if showRestTimer && currentSet}
+			<!-- Rest Timer Between Sets -->
 			<RestTimer
 				duration={currentSet.rest}
-				onComplete={handleRestComplete}
+				onComplete={handleSetRestComplete}
 				onSkip={skipRest}
 				autoStart={true}
 				soundEnabled={true}
