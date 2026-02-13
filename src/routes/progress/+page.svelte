@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase/client';
-	import { exercises, getExerciseById } from '$lib/data/exercises';
+	import { exercises, getExerciseById, type ExerciseType } from '$lib/data/exercises';
 	import { calculateExerciseProgress, getPersonalRecords, type ExerciseProgress } from '$lib/utils/progress';
 	import StrengthChart from '$lib/components/StrengthChart.svelte';
 	import VolumeTrendChart from '$lib/components/VolumeTrendChart.svelte';
@@ -17,8 +17,35 @@
 	// Get exercises that have been used in workouts
 	let usedExercises = $state<Array<{ id: string; name: string }>>([]);
 	let exerciseMap = $state<Map<string, Array<{ date: string; sets: any }>>>(new Map());
+	
+	// Custom exercises from database
+	let customExercises = $state<Array<{ id: string; name: string; exerciseType: ExerciseType; isCustom: boolean }>>([]);
+
+	async function loadCustomExercises() {
+		try {
+			const { data, error } = await supabase
+				.from('user_exercises')
+				.select('*')
+				.order('created_at', { ascending: false });
+
+			if (error) {
+				console.error('Error loading custom exercises:', error);
+				return;
+			}
+
+			customExercises = (data || []).map((ex: any) => ({
+				id: ex.id,
+				name: ex.name,
+				exerciseType: (ex.exercise_type || 'weights') as ExerciseType,
+				isCustom: true
+			}));
+		} catch (error) {
+			console.error('Error loading custom exercises:', error);
+		}
+	}
 
 	onMount(async () => {
+		await loadCustomExercises();
 		await loadProgressData();
 	});
 
@@ -66,10 +93,10 @@
 
 			exerciseMap = map;
 
-			// Get unique exercises
+			// Get unique exercises (from both default and custom)
 			usedExercises = Array.from(map.keys())
 				.map((id) => {
-					const exercise = getExerciseById(id);
+					const exercise = getExerciseById(id) || customExercises.find(ce => ce.id === id);
 					return exercise ? { id, name: exercise.name } : null;
 				})
 				.filter((e): e is { id: string; name: string } => e !== null)
@@ -78,7 +105,7 @@
 			// Calculate personal records
 			const allProgress: ExerciseProgress[] = [];
 			map.forEach((workouts, exerciseId) => {
-				const exercise = getExerciseById(exerciseId);
+				const exercise = getExerciseById(exerciseId) || customExercises.find(ce => ce.id === exerciseId);
 				if (exercise) {
 					const progress = calculateExerciseProgress(exerciseId, exercise.name, workouts);
 					if (progress.dates.length > 0) {
@@ -107,7 +134,7 @@
 
 	function loadExerciseProgress(exerciseId: string) {
 		const workouts = exerciseMap.get(exerciseId) || [];
-		const exercise = getExerciseById(exerciseId);
+		const exercise = getExerciseById(exerciseId) || customExercises.find(ce => ce.id === exerciseId);
 		if (exercise) {
 			exerciseProgress = calculateExerciseProgress(exerciseId, exercise.name, workouts);
 		} else {

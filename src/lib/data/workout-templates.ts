@@ -255,7 +255,10 @@ export const workoutTemplates: WorkoutTemplate[] = [
 /**
  * Get all exercises for a template with full exercise details
  */
-export function getTemplateExercises(template: WorkoutTemplate): Array<{
+export function getTemplateExercises(
+	template: WorkoutTemplate,
+	customExercises: Array<Exercise & { id: string }> = []
+): Array<{
 	exercise: Exercise;
 	sets: number;
 	reps: number | string;
@@ -264,7 +267,7 @@ export function getTemplateExercises(template: WorkoutTemplate): Array<{
 }> {
 	return template.exercises
 		.map((templateEx) => {
-			const exercise = getExerciseById(templateEx.exerciseId);
+			const exercise = getExerciseById(templateEx.exerciseId) || customExercises.find(ce => ce.id === templateEx.exerciseId);
 			if (!exercise) return null;
 			return {
 				exercise,
@@ -280,34 +283,63 @@ export function getTemplateExercises(template: WorkoutTemplate): Array<{
 /**
  * Convert template to workout format
  */
-export function templateToWorkoutExercises(template: WorkoutTemplate): Array<{
+export function templateToWorkoutExercises(
+	template: WorkoutTemplate,
+	customExercises: Array<Exercise & { id: string }> = []
+): Array<{
 	exercise: Exercise;
-	sets: Array<{ reps: number; weight: number; rest: number; completed: boolean }>;
+	exerciseType: 'weights' | 'bodyweight' | 'cardio' | 'stretches';
+	sets?: Array<{ reps: number; weight: number; rest: number; completed: boolean }>;
+	durationMinutes?: number;
+	calories?: number;
+	durationSeconds?: number;
+	reps?: number;
+	completed?: boolean;
 }> {
-	return getTemplateExercises(template).map(({ exercise, sets, reps, restSeconds }) => {
-		// Parse reps - handle "6-8", "max reps", or number
-		let defaultReps = exercise.defaultReps;
-		if (typeof reps === 'string') {
-			if (reps.includes('-')) {
-				// Take the lower number for default
-				const [min] = reps.split('-').map(Number);
-				defaultReps = min || exercise.defaultReps;
-			} else if (reps.toLowerCase().includes('max')) {
-				// Use exercise default for max reps
-				defaultReps = exercise.defaultReps;
-			}
-		} else {
-			defaultReps = reps;
-		}
-
-		return {
-			exercise,
-			sets: Array.from({ length: sets }, () => ({
-				reps: defaultReps,
-				weight: 0,
-				rest: restSeconds,
+	return getTemplateExercises(template, customExercises).map(({ exercise, sets, reps, restSeconds }) => {
+		if (exercise.exerciseType === 'cardio') {
+			return {
+				exercise,
+				exerciseType: 'cardio' as const,
+				durationMinutes: exercise.defaultDurationMinutes || 30,
+				calories: exercise.defaultCalories || 300,
 				completed: false
-			}))
-		};
+			};
+		} else if (exercise.exerciseType === 'stretches') {
+			return {
+				exercise,
+				exerciseType: 'stretches' as const,
+				durationSeconds: exercise.defaultDurationSeconds || 60,
+				reps: exercise.defaultRepsStretches || 10,
+				completed: false
+			};
+		} else {
+			// Weights or bodyweight
+			// Parse reps - handle "6-8", "max reps", or number
+			let defaultReps = exercise.defaultReps || 10;
+			if (typeof reps === 'string') {
+				if (reps.includes('-')) {
+					// Take the lower number for default
+					const [min] = reps.split('-').map(Number);
+					defaultReps = min || exercise.defaultReps || 10;
+				} else if (reps.toLowerCase().includes('max')) {
+					// Use exercise default for max reps
+					defaultReps = exercise.defaultReps || 10;
+				}
+			} else {
+				defaultReps = reps || exercise.defaultReps || 10;
+			}
+
+			return {
+				exercise,
+				exerciseType: (exercise.exerciseType === 'bodyweight' ? 'bodyweight' : 'weights') as const,
+				sets: Array.from({ length: sets || exercise.defaultSets || 3 }, () => ({
+					reps: defaultReps,
+					weight: 0,
+					rest: restSeconds || exercise.defaultRestSeconds || 60,
+					completed: false
+				}))
+			};
+		}
 	});
 }

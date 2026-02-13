@@ -139,47 +139,106 @@
 							<p class="text-sm font-semibold text-[var(--color-foreground)]">{exercise.equipment}</p>
 						</div>
 
-						<!-- Sets -->
+						<!-- Exercise Type -->
 						<div class="fitness-card p-4">
 							<div class="flex items-center gap-2 mb-2">
 								<Info class="w-4 h-4 text-[var(--color-secondary)]" />
-								<span class="text-xs font-semibold text-[var(--color-muted)]">Sets</span>
-							</div>
-							<p class="text-sm font-semibold text-[var(--color-foreground)]">{exercise.defaultSets}</p>
-						</div>
-
-						<!-- Reps -->
-						<div class="fitness-card p-4">
-							<div class="flex items-center gap-2 mb-2">
-								<Target class="w-4 h-4 text-[var(--color-accent)]" />
-								<span class="text-xs font-semibold text-[var(--color-muted)]">Reps</span>
-							</div>
-							<p class="text-sm font-semibold text-[var(--color-foreground)]">{exercise.defaultReps}</p>
-						</div>
-
-						<!-- Rest -->
-						<div class="fitness-card p-4">
-							<div class="flex items-center gap-2 mb-2">
-								<Clock class="w-4 h-4 text-[var(--color-primary)]" />
-								<span class="text-xs font-semibold text-[var(--color-muted)]">Rest</span>
+								<span class="text-xs font-semibold text-[var(--color-muted)]">Type</span>
 							</div>
 							<p class="text-sm font-semibold text-[var(--color-foreground)]">
-								{Math.floor(exercise.defaultRestSeconds / 60)}m {exercise.defaultRestSeconds % 60}s
+								{exercise.exerciseType ? exercise.exerciseType.charAt(0).toUpperCase() + exercise.exerciseType.slice(1) : 'Weights'}
 							</p>
 						</div>
+
+						{#if exercise.exerciseType === 'cardio'}
+							<!-- Duration (Cardio) -->
+							<div class="fitness-card p-4">
+								<div class="flex items-center gap-2 mb-2">
+									<Clock class="w-4 h-4 text-[var(--color-accent)]" />
+									<span class="text-xs font-semibold text-[var(--color-muted)]">Duration</span>
+								</div>
+								<p class="text-sm font-semibold text-[var(--color-foreground)]">
+									{exercise.defaultDurationMinutes || 30} min
+								</p>
+							</div>
+
+							<!-- Calories (Cardio) -->
+							<div class="fitness-card p-4">
+								<div class="flex items-center gap-2 mb-2">
+									<Target class="w-4 h-4 text-[var(--color-primary)]" />
+									<span class="text-xs font-semibold text-[var(--color-muted)]">Calories</span>
+								</div>
+								<p class="text-sm font-semibold text-[var(--color-foreground)]">
+									{exercise.defaultCalories || 300}
+								</p>
+							</div>
+						{:else if exercise.exerciseType === 'stretches'}
+							<!-- Duration (Stretches) -->
+							<div class="fitness-card p-4">
+								<div class="flex items-center gap-2 mb-2">
+									<Clock class="w-4 h-4 text-[var(--color-accent)]" />
+									<span class="text-xs font-semibold text-[var(--color-muted)]">Duration</span>
+								</div>
+								<p class="text-sm font-semibold text-[var(--color-foreground)]">
+									{exercise.defaultDurationSeconds || 60}s
+								</p>
+							</div>
+
+							<!-- Reps (Stretches) -->
+							<div class="fitness-card p-4">
+								<div class="flex items-center gap-2 mb-2">
+									<Target class="w-4 h-4 text-[var(--color-primary)]" />
+									<span class="text-xs font-semibold text-[var(--color-muted)]">Reps</span>
+								</div>
+								<p class="text-sm font-semibold text-[var(--color-foreground)]">
+									{exercise.defaultRepsStretches || 10}
+								</p>
+							</div>
+						{:else}
+							<!-- Sets (Weights/Bodyweight) -->
+							<div class="fitness-card p-4">
+								<div class="flex items-center gap-2 mb-2">
+									<Info class="w-4 h-4 text-[var(--color-secondary)]" />
+									<span class="text-xs font-semibold text-[var(--color-muted)]">Sets</span>
+								</div>
+								<p class="text-sm font-semibold text-[var(--color-foreground)]">{exercise.defaultSets || 3}</p>
+							</div>
+
+							<!-- Reps (Weights/Bodyweight) -->
+							<div class="fitness-card p-4">
+								<div class="flex items-center gap-2 mb-2">
+									<Target class="w-4 h-4 text-[var(--color-accent)]" />
+									<span class="text-xs font-semibold text-[var(--color-muted)]">Reps</span>
+								</div>
+								<p class="text-sm font-semibold text-[var(--color-foreground)]">{exercise.defaultReps || 10}</p>
+							</div>
+
+							<!-- Rest (Weights/Bodyweight) -->
+							<div class="fitness-card p-4">
+								<div class="flex items-center gap-2 mb-2">
+									<Clock class="w-4 h-4 text-[var(--color-primary)]" />
+									<span class="text-xs font-semibold text-[var(--color-muted)]">Rest</span>
+								</div>
+								<p class="text-sm font-semibold text-[var(--color-foreground)]">
+									{Math.floor((exercise.defaultRestSeconds || 60) / 60)}m {(exercise.defaultRestSeconds || 60) % 60}s
+								</p>
+							</div>
+						{/if}
 					</div>
 
-					<!-- Muscle Groups -->
-					<div>
-						<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-3">Muscle Groups</h3>
-						<div class="flex flex-wrap gap-2">
-							{#each exercise.muscleGroups as muscleGroup}
-								<span class="px-3 py-1.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-sm font-medium rounded-full">
-									{muscleGroup}
-								</span>
-							{/each}
+					<!-- Muscle Groups (only for weights/bodyweight) -->
+					{#if exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight'}
+						<div>
+							<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-3">Muscle Groups</h3>
+							<div class="flex flex-wrap gap-2">
+								{#each exercise.muscleGroups as muscleGroup}
+									<span class="px-3 py-1.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-sm font-medium rounded-full">
+										{muscleGroup}
+									</span>
+								{/each}
+							</div>
 						</div>
-					</div>
+					{/if}
 
 					<!-- Instructions -->
 					{#if exercise.instructions}

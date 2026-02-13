@@ -124,6 +124,10 @@ export interface Database {
 					default_sets: number | null;
 					default_reps: number | null;
 					default_rest_seconds: number | null;
+					default_duration_minutes: number | null;
+					default_calories: number | null;
+					default_duration_seconds: number | null;
+					default_reps_stretches: number | null;
 					instructions: string | null;
 					video_url: string | null;
 					created_at: string;
@@ -135,6 +139,10 @@ export interface Database {
 					default_sets?: number | null;
 					default_reps?: number | null;
 					default_rest_seconds?: number | null;
+					default_duration_minutes?: number | null;
+					default_calories?: number | null;
+					default_duration_seconds?: number | null;
+					default_reps_stretches?: number | null;
 					instructions?: string | null;
 					video_url?: string | null;
 					created_at?: string;
@@ -146,6 +154,10 @@ export interface Database {
 					default_sets?: number | null;
 					default_reps?: number | null;
 					default_rest_seconds?: number | null;
+					default_duration_minutes?: number | null;
+					default_calories?: number | null;
+					default_duration_seconds?: number | null;
+					default_reps_stretches?: number | null;
 					instructions?: string | null;
 					video_url?: string | null;
 					created_at?: string;
@@ -225,6 +237,62 @@ export interface Database {
 					measurements?: Json | null;
 					notes?: string | null;
 					created_at?: string;
+				};
+			};
+			user_exercises: {
+				Row: {
+					id: string;
+					name: string;
+					exercise_type: string; // 'weights' | 'cardio' | 'stretches' | 'bodyweight'
+					muscle_groups: string[] | null;
+					equipment: string;
+					default_sets: number | null;
+					default_reps: number | null;
+					default_rest_seconds: number | null;
+					default_duration_minutes: number | null;
+					default_calories: number | null;
+					default_duration_seconds: number | null;
+					default_reps_stretches: number | null;
+					instructions: string | null;
+					video_url: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					name: string;
+					exercise_type: string;
+					muscle_groups?: string[] | null;
+					equipment: string;
+					default_sets?: number | null;
+					default_reps?: number | null;
+					default_rest_seconds?: number | null;
+					default_duration_minutes?: number | null;
+					default_calories?: number | null;
+					default_duration_seconds?: number | null;
+					default_reps_stretches?: number | null;
+					instructions?: string | null;
+					video_url?: string | null;
+					created_at?: string;
+					updated_at?: string;
+				};
+				Update: {
+					id?: string;
+					name?: string;
+					exercise_type?: string;
+					muscle_groups?: string[] | null;
+					equipment?: string;
+					default_sets?: number | null;
+					default_reps?: number | null;
+					default_rest_seconds?: number | null;
+					default_duration_minutes?: number | null;
+					default_calories?: number | null;
+					default_duration_seconds?: number | null;
+					default_reps_stretches?: number | null;
+					instructions?: string | null;
+					video_url?: string | null;
+					created_at?: string;
+					updated_at?: string;
 				};
 			};
 		};

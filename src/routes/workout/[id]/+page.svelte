@@ -2,14 +2,19 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase/client';
-	import { getExerciseById, type Exercise } from '$lib/data/exercises';
+	import { getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
 	import { Calendar, Clock, Activity, ArrowLeft, Check } from 'lucide-svelte';
+
+	type WorkoutExerciseSets = 
+		| Array<{ reps: number; weight: number; rest: number; completed: boolean }>
+		| { type: 'cardio'; durationMinutes: number; calories: number; completed: boolean }
+		| { type: 'stretches'; durationSeconds: number; reps: number; completed: boolean };
 
 	interface WorkoutExercise {
 		id: string;
 		exercise_id: string;
 		exercise_order: number;
-		sets: Array<{ reps: number; weight: number; rest: number; completed: boolean }>;
+		sets: WorkoutExerciseSets;
 		notes: string | null;
 		exercise?: Exercise;
 	}
@@ -27,6 +32,9 @@
 	let workout = $state<Workout | null>(null);
 	let workoutExercises = $state<WorkoutExercise[]>([]);
 	let isLoading = $state(true);
+	
+	// Custom exercises from database
+	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
 
 	$effect(() => {
 		if (params.id) {
@@ -34,9 +42,44 @@
 		}
 	});
 
+	async function loadCustomExercises() {
+		try {
+			const { data, error } = await supabase
+				.from('user_exercises')
+				.select('*')
+				.order('created_at', { ascending: false });
+
+			if (error) {
+				console.error('Error loading custom exercises:', error);
+				return;
+			}
+
+			customExercises = (data || []).map((ex: any) => ({
+				id: ex.id,
+				name: ex.name,
+				exerciseType: (ex.exercise_type || 'weights') as ExerciseType,
+				muscleGroups: ex.muscle_groups || [],
+				equipment: ex.equipment,
+				defaultSets: ex.default_sets,
+				defaultReps: ex.default_reps,
+				defaultRestSeconds: ex.default_rest_seconds,
+				defaultDurationMinutes: ex.default_duration_minutes,
+				defaultCalories: ex.default_calories,
+				defaultDurationSeconds: ex.default_duration_seconds,
+				defaultRepsStretches: ex.default_reps_stretches,
+				instructions: ex.instructions || '',
+				videoUrl: ex.video_url || '',
+				isCustom: true
+			}));
+		} catch (error) {
+			console.error('Error loading custom exercises:', error);
+		}
+	}
+
 	async function loadWorkout(id: string) {
 		try {
 			isLoading = true;
+			await loadCustomExercises();
 
 			// Fetch workout
 			const { data: workoutData, error: workoutError } = await supabase
@@ -58,10 +101,13 @@
 			if (exercisesError) throw exercisesError;
 
 			// Enrich with exercise data
-			workoutExercises = (exercisesData || []).map((we) => ({
-				...we,
-				sets: we.sets as Array<{ reps: number; weight: number; rest: number; completed: boolean }>,
-				exercise: getExerciseById(we.exercise_id)
+			workoutExercises = (exercisesData || []).map((we: any) => ({
+				id: we.id,
+				exercise_id: we.exercise_id,
+				exercise_order: we.exercise_order,
+				sets: we.sets as WorkoutExerciseSets,
+				notes: we.notes,
+				exercise: getExerciseById(we.exercise_id) || customExercises.find(ce => ce.id === we.exercise_id)
 			}));
 		} catch (error) {
 			console.error('Error loading workout:', error);
@@ -82,24 +128,33 @@
 
 	function getTotalVolume(): number {
 		return workoutExercises.reduce((total, we) => {
-			return (
-				total +
-				we.sets.reduce((setTotal, set) => {
+			if (Array.isArray(we.sets)) {
+				return total + we.sets.reduce((setTotal, set) => {
 					return setTotal + (set.reps * set.weight);
-				}, 0)
-			);
+				}, 0);
+			}
+			return total;
 		}, 0);
 	}
 
 	function getCompletedSets(): number {
 		return workoutExercises.reduce((total, we) => {
-			return total + we.sets.filter((set) => set.completed).length;
+			if (Array.isArray(we.sets)) {
+				return total + we.sets.filter((set) => set.completed).length;
+			} else if (we.sets && typeof we.sets === 'object' && 'completed' in we.sets) {
+				return total + (we.sets.completed ? 1 : 0);
+			}
+			return total;
 		}, 0);
 	}
 
 	function getTotalSets(): number {
 		return workoutExercises.reduce((total, we) => {
-			return total + we.sets.length;
+			if (Array.isArray(we.sets)) {
+				return total + we.sets.length;
+			} else {
+				return total + 1; // Cardio/stretches count as 1 "set"
+			}
 		}, 0);
 	}
 </script>
@@ -174,43 +229,112 @@
 								{we.exercise?.name || 'Unknown Exercise'}
 							</h3>
 							{#if we.exercise}
-								<div class="flex flex-wrap gap-2">
-									{#each we.exercise.muscleGroups as mg}
-										<span class="px-2 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-xs rounded-full">
-											{mg}
-										</span>
-									{/each}
+								<div class="flex items-center gap-2 mb-2">
+									<span class="text-xs text-[var(--color-muted)]">
+										{we.exercise.exerciseType ? we.exercise.exerciseType.charAt(0).toUpperCase() + we.exercise.exerciseType.slice(1) : ''}
+									</span>
+									{#if (we.exercise.exerciseType === 'weights' || we.exercise.exerciseType === 'bodyweight') && we.exercise.muscleGroups.length > 0}
+										<div class="flex flex-wrap gap-2">
+											{#each we.exercise.muscleGroups as mg}
+												<span class="px-2 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-xs rounded-full">
+													{mg}
+												</span>
+											{/each}
+										</div>
+									{/if}
 								</div>
 							{/if}
 						</div>
 
-						<!-- Sets -->
-						<div class="space-y-2">
-							{#each we.sets as set, setIndex}
-								<div
-									class="flex items-center gap-3 p-3 rounded-lg {set.completed
-										? 'bg-[var(--color-accent)]/20 border border-[var(--color-accent)]/50'
-										: 'bg-[var(--color-card-hover)] border border-[var(--color-border)]'}"
-								>
+						<!-- Sets - Weights/Bodyweight -->
+						{#if Array.isArray(we.sets)}
+							<div class="space-y-2">
+								{#each we.sets as set, setIndex}
 									<div
-										class="flex-shrink-0 w-6 h-6 rounded-full border-2 {set.completed
-											? 'bg-[var(--color-accent)] border-[var(--color-accent)]'
-											: 'border-[var(--color-border)]'} flex items-center justify-center"
+										class="flex items-center gap-3 p-3 rounded-lg {set.completed
+											? 'bg-[var(--color-accent)]/20 border border-[var(--color-accent)]/50'
+											: 'bg-[var(--color-card-hover)] border border-[var(--color-border)]'}"
 									>
-										{#if set.completed}
-											<Check class="w-4 h-4 text-[var(--color-on-primary)]" />
-										{/if}
+										<div
+											class="flex-shrink-0 w-6 h-6 rounded-full border-2 {set.completed
+												? 'bg-[var(--color-accent)] border-[var(--color-accent)]'
+												: 'border-[var(--color-border)]'} flex items-center justify-center"
+										>
+											{#if set.completed}
+												<Check class="w-4 h-4 text-[var(--color-on-primary)]" />
+											{/if}
+										</div>
+										<span class="text-sm text-[var(--color-muted)] w-8">Set {setIndex + 1}</span>
+										<div class="flex-1 flex items-center gap-2">
+											<span class="text-[var(--color-foreground)] font-medium">{set.reps}</span>
+											<span class="text-[var(--color-muted)]">×</span>
+											<span class="text-[var(--color-foreground)] font-medium">{set.weight}</span>
+											<span class="text-[var(--color-muted)] text-sm">kg</span>
+										</div>
 									</div>
-									<span class="text-sm text-[var(--color-muted)] w-8">Set {setIndex + 1}</span>
-									<div class="flex-1 flex items-center gap-2">
-										<span class="text-[var(--color-foreground)] font-medium">{set.reps}</span>
-										<span class="text-[var(--color-muted)]">×</span>
-										<span class="text-[var(--color-foreground)] font-medium">{set.weight}</span>
-										<span class="text-[var(--color-muted)] text-sm">kg</span>
+								{/each}
+							</div>
+						{:else if we.sets && typeof we.sets === 'object' && 'type' in we.sets}
+							<!-- Cardio or Stretches -->
+							<div class="space-y-2">
+								{#if we.sets.type === 'cardio'}
+									<div
+										class="flex items-center gap-3 p-3 rounded-lg {we.sets.completed
+											? 'bg-[var(--color-accent)]/20 border border-[var(--color-accent)]/50'
+											: 'bg-[var(--color-card-hover)] border border-[var(--color-border)]'}"
+									>
+										<div
+											class="flex-shrink-0 w-6 h-6 rounded-full border-2 {we.sets.completed
+												? 'bg-[var(--color-accent)] border-[var(--color-accent)]'
+												: 'border-[var(--color-border)]'} flex items-center justify-center"
+										>
+											{#if we.sets.completed}
+												<Check class="w-4 h-4 text-[var(--color-on-primary)]" />
+											{/if}
+										</div>
+										<div class="flex-1 flex items-center gap-4">
+											<div class="flex items-center gap-2">
+												<Clock class="w-4 h-4 text-[var(--color-muted)]" />
+												<span class="text-[var(--color-foreground)] font-medium">{we.sets.durationMinutes}</span>
+												<span class="text-[var(--color-muted)] text-sm">min</span>
+											</div>
+											<div class="flex items-center gap-2">
+												<Activity class="w-4 h-4 text-[var(--color-muted)]" />
+												<span class="text-[var(--color-foreground)] font-medium">{we.sets.calories}</span>
+												<span class="text-[var(--color-muted)] text-sm">cal</span>
+											</div>
+										</div>
 									</div>
-								</div>
-							{/each}
-						</div>
+								{:else if we.sets.type === 'stretches'}
+									<div
+										class="flex items-center gap-3 p-3 rounded-lg {we.sets.completed
+											? 'bg-[var(--color-accent)]/20 border border-[var(--color-accent)]/50'
+											: 'bg-[var(--color-card-hover)] border border-[var(--color-border)]'}"
+									>
+										<div
+											class="flex-shrink-0 w-6 h-6 rounded-full border-2 {we.sets.completed
+												? 'bg-[var(--color-accent)] border-[var(--color-accent)]'
+												: 'border-[var(--color-border)]'} flex items-center justify-center"
+										>
+											{#if we.sets.completed}
+												<Check class="w-4 h-4 text-[var(--color-on-primary)]" />
+											{/if}
+										</div>
+										<div class="flex-1 flex items-center gap-4">
+											<div class="flex items-center gap-2">
+												<Clock class="w-4 h-4 text-[var(--color-muted)]" />
+												<span class="text-[var(--color-foreground)] font-medium">{we.sets.durationSeconds}</span>
+												<span class="text-[var(--color-muted)] text-sm">sec</span>
+											</div>
+											<div class="flex items-center gap-2">
+												<span class="text-[var(--color-foreground)] font-medium">{we.sets.reps}</span>
+												<span class="text-[var(--color-muted)] text-sm">reps</span>
+											</div>
+										</div>
+									</div>
+								{/if}
+							</div>
+						{/if}
 					</div>
 				{/each}
 			</div>

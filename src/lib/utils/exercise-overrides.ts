@@ -12,6 +12,10 @@ export interface ExerciseOverride {
 	default_sets?: number | null;
 	default_reps?: number | null;
 	default_rest_seconds?: number | null;
+	default_duration_minutes?: number | null;
+	default_calories?: number | null;
+	default_duration_seconds?: number | null;
+	default_reps_stretches?: number | null;
 	instructions?: string | null;
 	video_url?: string | null;
 	created_at: string;
@@ -55,7 +59,7 @@ export async function getAllExerciseOverrides(): Promise<Map<string, ExerciseOve
 		}
 
 		const overrideMap = new Map<string, ExerciseOverride>();
-		(data || []).forEach((override) => {
+		(data || []).forEach((override: any) => {
 			overrideMap.set(override.exercise_id, override);
 		});
 
@@ -83,6 +87,10 @@ export function mergeExerciseWithOverride(
 		defaultSets: override.default_sets ?? defaultExercise.defaultSets,
 		defaultReps: override.default_reps ?? defaultExercise.defaultReps,
 		defaultRestSeconds: override.default_rest_seconds ?? defaultExercise.defaultRestSeconds,
+		defaultDurationMinutes: override.default_duration_minutes ?? defaultExercise.defaultDurationMinutes,
+		defaultCalories: override.default_calories ?? defaultExercise.defaultCalories,
+		defaultDurationSeconds: override.default_duration_seconds ?? defaultExercise.defaultDurationSeconds,
+		defaultRepsStretches: override.default_reps_stretches ?? defaultExercise.defaultRepsStretches,
 		instructions: override.instructions ?? defaultExercise.instructions,
 		videoUrl: override.video_url ?? defaultExercise.videoUrl
 	};
@@ -97,6 +105,10 @@ export async function saveExerciseOverride(
 		default_sets?: number;
 		default_reps?: number;
 		default_rest_seconds?: number;
+		default_duration_minutes?: number;
+		default_calories?: number;
+		default_duration_seconds?: number;
+		default_reps_stretches?: number;
 		instructions?: string;
 		video_url?: string;
 	}
@@ -109,7 +121,7 @@ export async function saveExerciseOverride(
 			// Update existing override
 			const { data, error } = await supabase
 				.from('user_exercise_overrides')
-				.update(override)
+				.update(override as any as never)
 				.eq('exercise_id', exerciseId)
 				.select()
 				.single();
@@ -123,7 +135,7 @@ export async function saveExerciseOverride(
 				.insert({
 					exercise_id: exerciseId,
 					...override
-				})
+				} as any)
 				.select()
 				.single();
 

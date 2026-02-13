@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { X, Save, Trash2, RotateCcw } from 'lucide-svelte';
 	import { supabase } from '$lib/supabase/client';
-	import type { Exercise } from '$lib/data/exercises';
+	import type { Exercise, ExerciseType } from '$lib/data/exercises';
 	import {
 		getExerciseOverride,
 		saveExerciseOverride,
@@ -14,7 +14,7 @@
 		exercise: Exercise | null;
 		isCustom: boolean;
 		onClose: () => void;
-		onSave: () => void;
+		onSave: () => void | Promise<void>;
 	}
 
 	let { exercise, isCustom, onClose, onSave }: Props = $props();
@@ -26,18 +26,27 @@
 
 	// Form state
 	let name = $state('');
+	let exerciseType = $state<ExerciseType>('weights');
 	let muscleGroups = $state<string[]>([]);
 	let equipment = $state('');
+	let customEquipment = $state('');
+	let showCustomEquipment = $state(false);
 	let defaultSets = $state(3);
 	let defaultReps = $state(10);
 	let defaultRestSeconds = $state(60);
+	// Cardio fields
+	let defaultDurationMinutes = $state(30);
+	let defaultCalories = $state(300);
+	// Stretches fields
+	let defaultDurationSeconds = $state(60);
+	let defaultRepsStretches = $state(10);
 	let instructions = $state('');
 	let videoUrl = $state('');
 
 	// Muscle group input
 	let newMuscleGroup = $state('');
 
-	// Available muscle groups
+	// Available muscle groups (removed 'cardio')
 	const availableMuscleGroups = [
 		'chest',
 		'back',
@@ -49,51 +58,159 @@
 		'glutes',
 		'calves',
 		'core',
-		'forearms',
-		'cardio'
+		'forearms'
 	];
 
+	// Equipment dropdown options - Weights/Bodyweight
+	const weightsEquipmentOptions = [
+		'Barbell',
+		'Dumbbells',
+		'Cable Machine',
+		'Bodyweight',
+		'Pull-up Bar',
+		'Dip Bar',
+		'Leg Press Machine',
+		'Leg Extension Machine',
+		'Leg Curl Machine',
+		'Calf Raise Machine',
+		'Seated Calf Machine',
+		'Back Extension Machine',
+		'Reverse Hyper Machine',
+		'T-Bar Machine',
+		'Ab Wheel',
+		'None',
+		'Other'
+	];
+
+	// Equipment dropdown options - Cardio
+	const cardioEquipmentOptions = [
+		'Treadmill',
+		'Bike',
+		'Stationary Bike',
+		'Rowing Machine',
+		'Elliptical',
+		'Stair Climber',
+		'Jump Rope',
+		'None',
+		'Other'
+	];
+
+	// Get equipment options based on exercise type
+	const equipmentOptions = $derived(
+		exerciseType === 'cardio' 
+			? cardioEquipmentOptions 
+			: exerciseType === 'stretches'
+			? ['None', 'Other'] // Stretches typically don't need equipment
+			: weightsEquipmentOptions // weights and bodyweight
+	);
+
+	// Track custom equipment entries
+	let customEquipmentList = $state<string[]>([]);
+
 	// Initialize form from exercise
-	$effect(async () => {
-		if (exercise) {
-			// Load override if editing default exercise
-			if (!isCustom) {
-				isLoadingOverride = true;
-				override = await getExerciseOverride(exercise.id);
-				const mergedExercise = mergeExerciseWithOverride(exercise, override);
-				name = mergedExercise.name;
-				muscleGroups = [...mergedExercise.muscleGroups];
-				equipment = mergedExercise.equipment;
-				defaultSets = mergedExercise.defaultSets;
-				defaultReps = mergedExercise.defaultReps;
-				defaultRestSeconds = mergedExercise.defaultRestSeconds;
-				instructions = mergedExercise.instructions || '';
-				videoUrl = mergedExercise.videoUrl || '';
-				isLoadingOverride = false;
+	$effect(() => {
+		(async () => {
+			if (exercise) {
+				// Load override if editing default exercise
+				if (!isCustom) {
+					isLoadingOverride = true;
+					override = await getExerciseOverride(exercise.id);
+					const mergedExercise = mergeExerciseWithOverride(exercise, override);
+					name = mergedExercise.name;
+					exerciseType = mergedExercise.exerciseType;
+					muscleGroups = [...mergedExercise.muscleGroups];
+					equipment = mergedExercise.equipment;
+					showCustomEquipment = !equipmentOptions.includes(equipment);
+					if (showCustomEquipment) {
+						customEquipment = equipment;
+						if (!customEquipmentList.includes(equipment)) {
+							customEquipmentList = [...customEquipmentList, equipment];
+						}
+					}
+					defaultSets = mergedExercise.defaultSets ?? 3;
+					defaultReps = mergedExercise.defaultReps ?? 10;
+					defaultRestSeconds = mergedExercise.defaultRestSeconds ?? 60;
+					defaultDurationMinutes = mergedExercise.defaultDurationMinutes ?? 30;
+					defaultCalories = mergedExercise.defaultCalories ?? 300;
+					defaultDurationSeconds = mergedExercise.defaultDurationSeconds ?? 60;
+					defaultRepsStretches = mergedExercise.defaultRepsStretches ?? 10;
+					instructions = mergedExercise.instructions || '';
+					videoUrl = mergedExercise.videoUrl || '';
+					isLoadingOverride = false;
+				} else {
+					// Custom exercise - use as-is
+					name = exercise.name;
+					exerciseType = exercise.exerciseType;
+					muscleGroups = [...exercise.muscleGroups];
+					equipment = exercise.equipment;
+					showCustomEquipment = !equipmentOptions.includes(equipment);
+					if (showCustomEquipment) {
+						customEquipment = equipment;
+						if (!customEquipmentList.includes(equipment)) {
+							customEquipmentList = [...customEquipmentList, equipment];
+						}
+					}
+					defaultSets = exercise.defaultSets ?? 3;
+					defaultReps = exercise.defaultReps ?? 10;
+					defaultRestSeconds = exercise.defaultRestSeconds ?? 60;
+					defaultDurationMinutes = exercise.defaultDurationMinutes ?? 30;
+					defaultCalories = exercise.defaultCalories ?? 300;
+					defaultDurationSeconds = exercise.defaultDurationSeconds ?? 60;
+					defaultRepsStretches = exercise.defaultRepsStretches ?? 10;
+					instructions = exercise.instructions || '';
+					videoUrl = exercise.videoUrl || '';
+				}
 			} else {
-				// Custom exercise - use as-is
-				name = exercise.name;
-				muscleGroups = [...exercise.muscleGroups];
-				equipment = exercise.equipment;
-				defaultSets = exercise.defaultSets;
-				defaultReps = exercise.defaultReps;
-				defaultRestSeconds = exercise.defaultRestSeconds;
-				instructions = exercise.instructions || '';
-				videoUrl = exercise.videoUrl || '';
+				// New exercise
+				name = '';
+				exerciseType = 'weights';
+				muscleGroups = [];
+				equipment = '';
+				showCustomEquipment = false;
+				customEquipment = '';
+				defaultSets = 3;
+				defaultReps = 10;
+				defaultRestSeconds = 60;
+				defaultDurationMinutes = 30;
+				defaultCalories = 300;
+				defaultDurationSeconds = 60;
+				defaultRepsStretches = 10;
+				instructions = '';
+				videoUrl = '';
 			}
-		} else {
-			// New exercise
-			name = '';
-			muscleGroups = [];
-			equipment = '';
-			defaultSets = 3;
-			defaultReps = 10;
-			defaultRestSeconds = 60;
-			instructions = '';
-			videoUrl = '';
-		}
-		hasChanges = false;
+			hasChanges = false;
+		})();
 	});
+
+	// Handle equipment selection
+	function handleEquipmentChange(value: string) {
+		if (value === 'Other') {
+			showCustomEquipment = true;
+			equipment = '';
+		} else {
+			showCustomEquipment = false;
+			equipment = value;
+			customEquipment = '';
+		}
+	}
+
+	// Reset equipment when exercise type changes
+	$effect(() => {
+		// If equipment is not in the new list, reset it
+		if (equipment && !equipmentOptions.includes(equipment) && equipment !== customEquipment) {
+			equipment = '';
+			showCustomEquipment = false;
+			customEquipment = '';
+		}
+	});
+
+	// Handle custom equipment input
+	function handleCustomEquipmentBlur() {
+		if (customEquipment.trim() && !customEquipmentList.includes(customEquipment.trim())) {
+			customEquipmentList = [...customEquipmentList, customEquipment.trim()];
+		}
+		equipment = customEquipment.trim();
+	}
 
 	function addMuscleGroup() {
 		const mg = newMuscleGroup.toLowerCase().trim();
@@ -110,25 +227,48 @@
 	async function handleSave() {
 		if (!exercise) {
 			// New custom exercise
-			if (!name || muscleGroups.length === 0 || !equipment) {
+			const finalEquipment = showCustomEquipment ? customEquipment.trim() : equipment;
+			
+			// Validation based on exercise type
+			if (!name || !finalEquipment) {
 				alert('Please fill in all required fields');
+				return;
+			}
+			
+			if ((exerciseType === 'weights' || exerciseType === 'bodyweight') && muscleGroups.length === 0) {
+				alert('Please select at least one muscle group');
 				return;
 			}
 
 			try {
-				const { error } = await supabase.from('user_exercises').insert({
+				const insertData: any = {
 					name,
-					muscle_groups: muscleGroups,
-					equipment,
-					default_sets: defaultSets,
-					default_reps: defaultReps,
-					default_rest_seconds: defaultRestSeconds,
+					exercise_type: exerciseType,
+					equipment: finalEquipment,
 					instructions: instructions || null,
 					video_url: videoUrl || null
-				});
+				};
+
+				// Add fields based on exercise type
+				if (exerciseType === 'weights' || exerciseType === 'bodyweight') {
+					insertData.muscle_groups = muscleGroups;
+					insertData.default_sets = defaultSets;
+					insertData.default_reps = defaultReps;
+					insertData.default_rest_seconds = defaultRestSeconds;
+				} else if (exerciseType === 'cardio') {
+					insertData.muscle_groups = []; // Required field, empty for cardio
+					insertData.default_duration_minutes = defaultDurationMinutes;
+					insertData.default_calories = defaultCalories;
+				} else if (exerciseType === 'stretches') {
+					insertData.muscle_groups = []; // Required field, empty for stretches
+					insertData.default_duration_seconds = defaultDurationSeconds;
+					insertData.default_reps_stretches = defaultRepsStretches;
+				}
+
+				const { error } = await supabase.from('user_exercises').insert(insertData);
 
 				if (error) throw error;
-				onSave();
+				await onSave();
 				onClose();
 			} catch (error) {
 				console.error('Error saving exercise:', error);
@@ -140,18 +280,51 @@
 		try {
 			if (isCustom) {
 				// Update custom exercise
+				const finalEquipment = showCustomEquipment ? customEquipment.trim() : equipment;
+				const updateData: any = {
+					name,
+					exercise_type: exerciseType,
+					equipment: finalEquipment,
+					instructions: instructions || null,
+					video_url: videoUrl || null
+				};
+
+				// Add fields based on exercise type
+				if (exerciseType === 'weights' || exerciseType === 'bodyweight') {
+					updateData.muscle_groups = muscleGroups;
+					updateData.default_sets = defaultSets;
+					updateData.default_reps = defaultReps;
+					updateData.default_rest_seconds = defaultRestSeconds;
+					// Clear cardio/stretches fields
+					updateData.default_duration_minutes = null;
+					updateData.default_calories = null;
+					updateData.default_duration_seconds = null;
+					updateData.default_reps_stretches = null;
+				} else if (exerciseType === 'cardio') {
+					updateData.default_duration_minutes = defaultDurationMinutes;
+					updateData.default_calories = defaultCalories;
+					// Clear weights/stretches fields
+					updateData.muscle_groups = [];
+					updateData.default_sets = null;
+					updateData.default_reps = null;
+					updateData.default_rest_seconds = null;
+					updateData.default_duration_seconds = null;
+					updateData.default_reps_stretches = null;
+				} else if (exerciseType === 'stretches') {
+					updateData.default_duration_seconds = defaultDurationSeconds;
+					updateData.default_reps_stretches = defaultRepsStretches;
+					// Clear weights/cardio fields
+					updateData.muscle_groups = [];
+					updateData.default_sets = null;
+					updateData.default_reps = null;
+					updateData.default_rest_seconds = null;
+					updateData.default_duration_minutes = null;
+					updateData.default_calories = null;
+				}
+
 				const { error } = await supabase
 					.from('user_exercises')
-					.update({
-						name,
-						muscle_groups: muscleGroups,
-						equipment,
-						default_sets: defaultSets,
-						default_reps: defaultReps,
-						default_rest_seconds: defaultRestSeconds,
-						instructions: instructions || null,
-						video_url: videoUrl || null
-					})
+					.update(updateData as any as never)
 					.eq('id', exercise.id);
 
 				if (error) throw error;
@@ -162,24 +335,46 @@
 					default_sets?: number;
 					default_reps?: number;
 					default_rest_seconds?: number;
+					default_duration_minutes?: number;
+					default_calories?: number;
+					default_duration_seconds?: number;
+					default_reps_stretches?: number;
 					instructions?: string;
 					video_url?: string;
 				} = {};
 
-				if (defaultSets !== exercise.defaultSets) {
-					overrideData.default_sets = defaultSets;
+				// Compare based on exercise type
+				if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
+					if (defaultSets !== (exercise.defaultSets ?? 3)) {
+						overrideData.default_sets = defaultSets;
+					}
+					if (defaultReps !== (exercise.defaultReps ?? 10)) {
+						overrideData.default_reps = defaultReps;
+					}
+					if (defaultRestSeconds !== (exercise.defaultRestSeconds ?? 60)) {
+						overrideData.default_rest_seconds = defaultRestSeconds;
+					}
+				} else if (exercise.exerciseType === 'cardio') {
+					if (defaultDurationMinutes !== (exercise.defaultDurationMinutes ?? 30)) {
+						overrideData.default_duration_minutes = defaultDurationMinutes;
+					}
+					if (defaultCalories !== (exercise.defaultCalories ?? 300)) {
+						overrideData.default_calories = defaultCalories;
+					}
+				} else if (exercise.exerciseType === 'stretches') {
+					if (defaultDurationSeconds !== (exercise.defaultDurationSeconds ?? 60)) {
+						overrideData.default_duration_seconds = defaultDurationSeconds;
+					}
+					if (defaultRepsStretches !== (exercise.defaultRepsStretches ?? 10)) {
+						overrideData.default_reps_stretches = defaultRepsStretches;
+					}
 				}
-				if (defaultReps !== exercise.defaultReps) {
-					overrideData.default_reps = defaultReps;
-				}
-				if (defaultRestSeconds !== exercise.defaultRestSeconds) {
-					overrideData.default_rest_seconds = defaultRestSeconds;
-				}
+
 				if (instructions !== (exercise.instructions || '')) {
-					overrideData.instructions = instructions || null;
+					overrideData.instructions = instructions || undefined;
 				}
 				if (videoUrl !== (exercise.videoUrl || '')) {
-					overrideData.video_url = videoUrl || null;
+					overrideData.video_url = videoUrl || undefined;
 				}
 
 				// If no changes, delete override if it exists
@@ -192,7 +387,7 @@
 				}
 			}
 
-			onSave();
+			await onSave();
 			onClose();
 		} catch (error) {
 			console.error('Error saving exercise:', error);
@@ -212,7 +407,7 @@
 				const { error } = await supabase.from('user_exercises').delete().eq('id', exercise.id);
 				if (error) throw error;
 
-				onSave();
+				await onSave();
 				onClose();
 			} catch (error) {
 				console.error('Error deleting exercise:', error);
@@ -227,7 +422,7 @@
 
 			try {
 				await deleteExerciseOverride(exercise.id);
-				onSave();
+				await onSave();
 				onClose();
 			} catch (error) {
 				console.error('Error deleting override:', error);
@@ -247,9 +442,13 @@
 			// Reload override
 			override = await getExerciseOverride(exercise.id);
 			const mergedExercise = mergeExerciseWithOverride(exercise, override);
-			defaultSets = mergedExercise.defaultSets;
-			defaultReps = mergedExercise.defaultReps;
-			defaultRestSeconds = mergedExercise.defaultRestSeconds;
+			defaultSets = mergedExercise.defaultSets ?? 3;
+			defaultReps = mergedExercise.defaultReps ?? 10;
+			defaultRestSeconds = mergedExercise.defaultRestSeconds ?? 60;
+			defaultDurationMinutes = mergedExercise.defaultDurationMinutes ?? 30;
+			defaultCalories = mergedExercise.defaultCalories ?? 300;
+			defaultDurationSeconds = mergedExercise.defaultDurationSeconds ?? 60;
+			defaultRepsStretches = mergedExercise.defaultRepsStretches ?? 10;
 			instructions = mergedExercise.instructions || '';
 			videoUrl = mergedExercise.videoUrl || '';
 			hasChanges = false;
@@ -329,114 +528,231 @@
 					{/if}
 				</div>
 
+				<!-- Exercise Type (only for custom exercises) -->
+				{#if isCustom}
+					<div>
+						<label for="exercise-type" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+							Exercise Type *
+						</label>
+						<select
+							id="exercise-type"
+							bind:value={exerciseType}
+							class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+						>
+							<option value="weights">Weights</option>
+							<option value="bodyweight">Bodyweight</option>
+							<option value="cardio">Cardio</option>
+							<option value="stretches">Stretches</option>
+						</select>
+					</div>
+				{:else}
+					<!-- Show exercise type for default exercises (read-only) -->
+					<div>
+						<label class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+							Exercise Type
+						</label>
+						<div class="px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] opacity-50">
+							{exercise?.exerciseType ? exercise.exerciseType.charAt(0).toUpperCase() + exercise.exerciseType.slice(1) : 'N/A'}
+						</div>
+					</div>
+				{/if}
+
 				<!-- Equipment -->
 				<div>
 					<label for="exercise-equipment" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
 						Equipment {isCustom ? '*' : ''}
 					</label>
-					<input
-						id="exercise-equipment"
-						type="text"
-						bind:value={equipment}
-						placeholder="e.g., Barbell, Dumbbells"
-						disabled={!isCustom}
-						class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
-					/>
-					{#if !isCustom}
+					{#if isCustom}
+						<select
+							id="exercise-equipment"
+							value={showCustomEquipment ? 'Other' : equipment}
+							onchange={(e) => {
+								const target = e.target as HTMLSelectElement;
+								handleEquipmentChange(target.value);
+							}}
+							class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+						>
+							<option value="">Select equipment</option>
+							{#each equipmentOptions as opt}
+								<option value={opt}>{opt}</option>
+							{/each}
+							{#each customEquipmentList as custom}
+								{#if !equipmentOptions.includes(custom)}
+									<option value={custom}>{custom}</option>
+								{/if}
+							{/each}
+						</select>
+						{#if showCustomEquipment}
+							<input
+								type="text"
+								bind:value={customEquipment}
+								onblur={handleCustomEquipmentBlur}
+								placeholder="Enter custom equipment"
+								class="w-full mt-2 px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+							/>
+						{/if}
+					{:else}
+						<div class="px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] opacity-50">
+							{exercise?.equipment || 'N/A'}
+						</div>
 						<p class="text-xs text-[var(--color-muted)] mt-1">
 							Equipment cannot be changed for default exercises
 						</p>
 					{/if}
 				</div>
 
-				<!-- Muscle Groups -->
-				<div>
-					<label class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-						Muscle Groups {isCustom ? '*' : ''}
-					</label>
-					{#if isCustom}
-						<div class="flex gap-2 mb-2">
-							<select
-								bind:value={newMuscleGroup}
-								class="flex-1 px-3 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
-							>
-								<option value="">Select muscle group</option>
-								{#each availableMuscleGroups as mg}
-									{#if !muscleGroups.includes(mg)}
-										<option value={mg}>{mg.charAt(0).toUpperCase() + mg.slice(1)}</option>
+				<!-- Muscle Groups (only for weights and bodyweight) -->
+				{#if (exerciseType === 'weights' || exerciseType === 'bodyweight') && (isCustom || exercise)}
+					<div>
+						<label class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+							Muscle Groups {isCustom ? '*' : ''}
+						</label>
+						{#if isCustom}
+							<div class="flex gap-2 mb-2">
+								<select
+									bind:value={newMuscleGroup}
+									class="flex-1 px-3 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+								>
+									<option value="">Select muscle group</option>
+									{#each availableMuscleGroups as mg}
+										{#if !muscleGroups.includes(mg)}
+											<option value={mg}>{mg.charAt(0).toUpperCase() + mg.slice(1)}</option>
+										{/if}
+									{/each}
+								</select>
+								<button
+									onclick={addMuscleGroup}
+									disabled={!newMuscleGroup}
+									class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									Add
+								</button>
+							</div>
+						{/if}
+						<div class="flex flex-wrap gap-2">
+							{#each muscleGroups as mg}
+								<span class="px-3 py-1.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded-full flex items-center gap-2">
+									{mg}
+									{#if isCustom}
+										<button
+											onclick={() => removeMuscleGroup(mg)}
+											class="text-[var(--color-primary)] hover:text-[var(--color-danger)]"
+										>
+											<X class="w-3 h-3" />
+										</button>
 									{/if}
-								{/each}
-							</select>
-							<button
-								onclick={addMuscleGroup}
-								disabled={!newMuscleGroup}
-								class="px-4 py-2 bg-[var(--color-primary)] text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								Add
-							</button>
+								</span>
+							{/each}
 						</div>
-					{/if}
-					<div class="flex flex-wrap gap-2">
-						{#each muscleGroups as mg}
-							<span class="px-3 py-1.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded-full flex items-center gap-2">
-								{mg}
-								{#if isCustom}
-									<button
-										onclick={() => removeMuscleGroup(mg)}
-										class="text-[var(--color-primary)] hover:text-[var(--color-danger)]"
-									>
-										<X class="w-3 h-3" />
-									</button>
-								{/if}
-							</span>
-						{/each}
+						{#if !isCustom}
+							<p class="text-xs text-[var(--color-muted)] mt-1">
+								Muscle groups cannot be changed for default exercises
+							</p>
+						{/if}
 					</div>
-					{#if !isCustom}
-						<p class="text-xs text-[var(--color-muted)] mt-1">
-							Muscle groups cannot be changed for default exercises
-						</p>
-					{/if}
-				</div>
+				{/if}
 
-				<!-- Defaults Grid -->
-				<div class="grid grid-cols-3 gap-4">
-					<div>
-						<label for="exercise-sets" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-							Sets
-						</label>
-						<input
-							id="exercise-sets"
-							type="number"
-							bind:value={defaultSets}
-							min="1"
-							class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
-						/>
+				<!-- Defaults Grid - Weights and Bodyweight -->
+				{#if exerciseType === 'weights' || exerciseType === 'bodyweight'}
+					<div class="grid grid-cols-3 gap-4">
+						<div>
+							<label for="exercise-sets" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+								Sets
+							</label>
+							<input
+								id="exercise-sets"
+								type="number"
+								bind:value={defaultSets}
+								min="1"
+								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+							/>
+						</div>
+						<div>
+							<label for="exercise-reps" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+								Reps
+							</label>
+							<input
+								id="exercise-reps"
+								type="number"
+								bind:value={defaultReps}
+								min="1"
+								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+							/>
+						</div>
+						<div>
+							<label for="exercise-rest" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+								Rest (sec)
+							</label>
+							<input
+								id="exercise-rest"
+								type="number"
+								bind:value={defaultRestSeconds}
+								min="0"
+								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+							/>
+						</div>
 					</div>
-					<div>
-						<label for="exercise-reps" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-							Reps
-						</label>
-						<input
-							id="exercise-reps"
-							type="number"
-							bind:value={defaultReps}
-							min="1"
-							class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
-						/>
+				{/if}
+
+				<!-- Cardio Fields -->
+				{#if exerciseType === 'cardio'}
+					<div class="grid grid-cols-2 gap-4">
+						<div>
+							<label for="exercise-duration" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+								Duration (minutes)
+							</label>
+							<input
+								id="exercise-duration"
+								type="number"
+								bind:value={defaultDurationMinutes}
+								min="1"
+								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+							/>
+						</div>
+						<div>
+							<label for="exercise-calories" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+								Calories
+							</label>
+							<input
+								id="exercise-calories"
+								type="number"
+								bind:value={defaultCalories}
+								min="0"
+								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+							/>
+						</div>
 					</div>
-					<div>
-						<label for="exercise-rest" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-							Rest (sec)
-						</label>
-						<input
-							id="exercise-rest"
-							type="number"
-							bind:value={defaultRestSeconds}
-							min="0"
-							class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
-						/>
+				{/if}
+
+				<!-- Stretches Fields -->
+				{#if exerciseType === 'stretches'}
+					<div class="grid grid-cols-2 gap-4">
+						<div>
+							<label for="exercise-duration-stretches" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+								Duration (seconds)
+							</label>
+							<input
+								id="exercise-duration-stretches"
+								type="number"
+								bind:value={defaultDurationSeconds}
+								min="1"
+								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+							/>
+						</div>
+						<div>
+							<label for="exercise-reps-stretches" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+								Reps
+							</label>
+							<input
+								id="exercise-reps-stretches"
+								type="number"
+								bind:value={defaultRepsStretches}
+								min="1"
+								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+							/>
+						</div>
 					</div>
-				</div>
+				{/if}
 
 				<!-- Instructions -->
 				<div>

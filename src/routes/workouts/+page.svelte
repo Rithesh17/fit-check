@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase/client';
-	import { exercises, getExerciseById, getExercisesByMuscleGroup, searchExercises, type Exercise } from '$lib/data/exercises';
+	import { exercises, getExerciseById, getExercisesByMuscleGroup, searchExercises, type Exercise, type ExerciseType } from '$lib/data/exercises';
 	import { Search, X, Plus, ChevronLeft, ChevronRight, Activity, BookOpen, Play } from 'lucide-svelte';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import ExerciseEditor from '$lib/components/ExerciseEditor.svelte';
@@ -15,9 +15,13 @@
 	let searchQuery = $state('');
 	let selectedMuscleGroup = $state<string | null>(null);
 	let selectedEquipment = $state<string | null>(null);
+	let selectedExerciseType = $state<string | null>(null);
 	let selectedExercise = $state<Exercise | null>(null);
 	let exerciseToEdit = $state<Exercise | null>(null);
 	let isEditing = $state(false);
+	
+	// Custom exercises from database
+	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
 
 	// Workout-related state: templates (saved plans) + completed sessions (history)
 	let workoutTemplates = $state<Array<{ id: string; name: string | null; exercise_count: number }>>([]);
@@ -29,24 +33,36 @@
 	const EXERCISES_PER_PAGE = 20;
 	let currentPage = $state(1);
 
-	// Get unique muscle groups and equipment
+	// Combine default and custom exercises
+	const allExercises = $derived.by(() => {
+		return [...exercises, ...customExercises];
+	});
+
+	// Get unique muscle groups and equipment (from all exercises)
 	const muscleGroups = $derived.by(() => {
-		if (!exercises || exercises.length === 0) return [];
-		return Array.from(new Set(exercises.flatMap((ex) => ex.muscleGroups))).sort();
+		const all = [...exercises, ...customExercises];
+		if (!all || all.length === 0) return [];
+		return Array.from(new Set(all.flatMap((ex) => ex.muscleGroups))).sort();
 	});
 	const equipmentTypes = $derived.by(() => {
-		if (!exercises || exercises.length === 0) return [];
-		return Array.from(new Set(exercises.map((ex) => ex.equipment))).sort();
+		const all = [...exercises, ...customExercises];
+		if (!all || all.length === 0) return [];
+		return Array.from(new Set(all.map((ex) => ex.equipment))).sort();
 	});
 
 	// Filter exercises
 	let filteredExercises = $derived.by(() => {
-		if (!exercises || exercises.length === 0) return [];
-		let result = exercises;
+		if (!allExercises || allExercises.length === 0) return [];
+		let result = allExercises;
 
 		// Search filter
 		if (searchQuery) {
-			result = searchExercises(searchQuery);
+			const query = searchQuery.toLowerCase();
+			result = allExercises.filter((ex) => 
+				ex.name.toLowerCase().includes(query) ||
+				ex.muscleGroups.some(mg => mg.toLowerCase().includes(query)) ||
+				ex.equipment.toLowerCase().includes(query)
+			);
 		}
 
 		// Muscle group filter
@@ -57,6 +73,11 @@
 		// Equipment filter
 		if (selectedEquipment) {
 			result = result.filter((ex) => ex.equipment === selectedEquipment);
+		}
+
+		// Exercise type filter
+		if (selectedExerciseType) {
+			result = result.filter((ex) => ex.exerciseType === selectedExerciseType);
 		}
 
 		return result;
@@ -86,10 +107,11 @@
 		searchQuery = '';
 		selectedMuscleGroup = null;
 		selectedEquipment = null;
+		selectedExerciseType = null;
 	}
 
 	let hasActiveFilters = $derived(
-		searchQuery !== '' || selectedMuscleGroup !== null || selectedEquipment !== null
+		searchQuery !== '' || selectedMuscleGroup !== null || selectedEquipment !== null || selectedExerciseType !== null
 	);
 
 	async function loadWorkouts() {
@@ -162,12 +184,34 @@
 		const exs = templateExercisesMap[templateId] || [];
 		const exercisesPayload = exs
 			.map((ex) => {
-				const exercise = getExerciseById(ex.exercise_id);
+				const exercise = getExerciseById(ex.exercise_id) || customExercises.find(ce => ce.id === ex.exercise_id);
 				if (!exercise) return null;
-				const sets = (ex.sets.length ? ex.sets : [{ reps: exercise.defaultReps, weight: 0, rest: exercise.defaultRestSeconds }]).map(
-					(s) => ({ ...s, completed: false })
-				);
-				return { exerciseId: exercise.id, sets };
+				
+				// Handle different exercise types
+				if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
+					// Check if sets is an array (old format) or object with type
+					let sets;
+					if (Array.isArray(ex.sets)) {
+						sets = (ex.sets.length ? ex.sets : [{ reps: exercise.defaultReps || 10, weight: 0, rest: exercise.defaultRestSeconds || 60 }]).map(
+							(s: any) => ({ ...s, completed: false })
+						);
+					} else {
+						// Fallback to defaults
+						sets = [{ reps: exercise.defaultReps || 10, weight: 0, rest: exercise.defaultRestSeconds || 60, completed: false }];
+					}
+					return { exerciseId: exercise.id, exerciseType: exercise.exerciseType, sets };
+				} else if (exercise.exerciseType === 'cardio') {
+					const cardioData = (typeof ex.sets === 'object' && ex.sets !== null && !Array.isArray(ex.sets) && ex.sets.type === 'cardio')
+						? ex.sets
+						: { type: 'cardio', durationMinutes: exercise.defaultDurationMinutes || 30, calories: exercise.defaultCalories || 300 };
+					return { exerciseId: exercise.id, exerciseType: 'cardio', ...cardioData, completed: false };
+				} else if (exercise.exerciseType === 'stretches') {
+					const stretchesData = (typeof ex.sets === 'object' && ex.sets !== null && !Array.isArray(ex.sets) && ex.sets.type === 'stretches')
+						? ex.sets
+						: { type: 'stretches', durationSeconds: exercise.defaultDurationSeconds || 60, reps: exercise.defaultRepsStretches || 10 };
+					return { exerciseId: exercise.id, exerciseType: 'stretches', ...stretchesData, completed: false };
+				}
+				return null;
 			})
 			.filter(Boolean);
 		if (exercisesPayload.length === 0) {
@@ -207,7 +251,42 @@
 		}
 	}
 
-	onMount(() => {
+	async function loadCustomExercises() {
+		try {
+			const { data, error } = await supabase
+				.from('user_exercises')
+				.select('*')
+				.order('created_at', { ascending: false });
+
+			if (error) {
+				console.error('Error loading custom exercises:', error);
+				return;
+			}
+
+			customExercises = (data || []).map((ex: any) => ({
+				id: ex.id,
+				name: ex.name,
+				exerciseType: (ex.exercise_type || 'weights') as ExerciseType,
+				muscleGroups: ex.muscle_groups || [],
+				equipment: ex.equipment,
+				defaultSets: ex.default_sets,
+				defaultReps: ex.default_reps,
+				defaultRestSeconds: ex.default_rest_seconds,
+				defaultDurationMinutes: ex.default_duration_minutes,
+				defaultCalories: ex.default_calories,
+				defaultDurationSeconds: ex.default_duration_seconds,
+				defaultRepsStretches: ex.default_reps_stretches,
+				instructions: ex.instructions || '',
+				videoUrl: ex.video_url || '',
+				isCustom: true
+			}));
+		} catch (error) {
+			console.error('Error loading custom exercises:', error);
+		}
+	}
+
+	onMount(async () => {
+		await loadCustomExercises();
 		if (viewMode === 'workouts') {
 			loadWorkouts();
 		}
@@ -286,6 +365,18 @@
 
 				<!-- Filters -->
 				<div class="flex items-center gap-2 flex-wrap">
+					<!-- Exercise Type Filter -->
+					<select
+						bind:value={selectedExerciseType}
+						class="flex-1 min-w-[120px] px-3 py-2 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-sm focus:outline-none focus:border-[var(--color-primary)]"
+					>
+						<option value={null}>All Types</option>
+						<option value="weights">Weights</option>
+						<option value="bodyweight">Bodyweight</option>
+						<option value="cardio">Cardio</option>
+						<option value="stretches">Stretches</option>
+					</select>
+
 					<!-- Muscle Group Filter -->
 					<select
 						bind:value={selectedMuscleGroup}
@@ -468,9 +559,14 @@
 						>
 							<div class="flex items-start justify-between mb-3">
 								<div class="flex-1">
-									<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-2">
-										{exercise.name}
-									</h3>
+									<div class="flex items-center gap-2 mb-2">
+										<h3 class="text-lg font-semibold text-[var(--color-foreground)]">
+											{exercise.name}
+										</h3>
+										<span class="px-2 py-0.5 bg-[var(--color-accent)]/20 text-[var(--color-accent)] text-xs font-medium rounded-full">
+											{exercise.exerciseType ? exercise.exerciseType.charAt(0).toUpperCase() + exercise.exerciseType.slice(1) : 'Weights'}
+										</span>
+									</div>
 									<p class="text-sm text-[var(--color-muted)] mb-3">{exercise.equipment}</p>
 									<div class="flex flex-wrap gap-2 mb-3">
 										{#each exercise.muscleGroups as mg}
@@ -487,9 +583,19 @@
 								</div>
 							</div>
 							<div class="pt-3 border-t border-[var(--color-border)] flex items-center gap-4 text-xs text-[var(--color-muted)]">
-								<span>Default: {exercise.defaultSets} sets × {exercise.defaultReps} reps</span>
-								<span>•</span>
-								<span>Rest: {exercise.defaultRestSeconds}s</span>
+								{#if exercise.exerciseType === 'cardio'}
+									<span>Duration: {exercise.defaultDurationMinutes || 30} min</span>
+									<span>•</span>
+									<span>Calories: {exercise.defaultCalories || 300}</span>
+								{:else if exercise.exerciseType === 'stretches'}
+									<span>Duration: {exercise.defaultDurationSeconds || 60}s</span>
+									<span>•</span>
+									<span>Reps: {exercise.defaultRepsStretches || 10}</span>
+								{:else}
+									<span>Default: {exercise.defaultSets || 3} sets × {exercise.defaultReps || 10} reps</span>
+									<span>•</span>
+									<span>Rest: {exercise.defaultRestSeconds || 60}s</span>
+								{/if}
 							</div>
 						</button>
 					{/each}
@@ -549,8 +655,8 @@
 				isEditing = false;
 				exerciseToEdit = null;
 			}}
-			onSave={() => {
-				// Refresh if needed
+			onSave={async () => {
+				await loadCustomExercises();
 				isEditing = false;
 				exerciseToEdit = null;
 			}}

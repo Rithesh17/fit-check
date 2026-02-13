@@ -4,14 +4,24 @@
  * Each exercise includes: name, muscle groups, equipment, default reps/sets, instructions
  */
 
+export type ExerciseType = 'weights' | 'cardio' | 'stretches' | 'bodyweight';
+
 export interface Exercise {
 	id: string;
 	name: string;
-	muscleGroups: string[];
+	exerciseType: ExerciseType;
+	muscleGroups: string[]; // Only for weights and bodyweight
 	equipment: string;
-	defaultSets: number;
-	defaultReps: number;
-	defaultRestSeconds: number;
+	// For weights and bodyweight
+	defaultSets?: number;
+	defaultReps?: number;
+	defaultRestSeconds?: number;
+	// For cardio
+	defaultDurationMinutes?: number;
+	defaultCalories?: number;
+	// For stretches
+	defaultDurationSeconds?: number;
+	defaultRepsStretches?: number;
 	instructions: string;
 	imageUrl?: string;
 	videoUrl?: string; // YouTube video URL for exercise demonstration
@@ -22,6 +32,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'bench-press',
 		name: 'Bench Press',
+		exerciseType: 'weights',
 		muscleGroups: ['chest', 'triceps', 'shoulders'],
 		equipment: 'Barbell',
 		defaultSets: 4,
@@ -32,6 +43,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'incline-bench-press',
 		name: 'Incline Bench Press',
+		exerciseType: 'weights',
 		muscleGroups: ['chest', 'triceps', 'shoulders'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -42,6 +54,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'dumbbell-flyes',
 		name: 'Dumbbell Flyes',
+		exerciseType: 'weights',
 		muscleGroups: ['chest'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -52,6 +65,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'push-ups',
 		name: 'Push-ups',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['chest', 'triceps', 'shoulders'],
 		equipment: 'Bodyweight',
 		defaultSets: 3,
@@ -62,6 +76,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'dips',
 		name: 'Dips',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['chest', 'triceps', 'shoulders'],
 		equipment: 'Dip Bar',
 		defaultSets: 3,
@@ -72,6 +87,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'cable-crossovers',
 		name: 'Cable Crossovers',
+		exerciseType: 'weights',
 		muscleGroups: ['chest'],
 		equipment: 'Cable Machine',
 		defaultSets: 3,
@@ -82,6 +98,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'dumbbell-bench-press',
 		name: 'Dumbbell Bench Press',
+		exerciseType: 'weights',
 		muscleGroups: ['chest', 'triceps', 'shoulders'],
 		equipment: 'Dumbbells',
 		defaultSets: 4,
@@ -93,6 +110,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'incline-dumbbell-bench-press',
 		name: 'Incline Dumbbell Bench Press',
+		exerciseType: 'weights',
 		muscleGroups: ['chest', 'triceps', 'shoulders'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -106,6 +124,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'deadlift',
 		name: 'Deadlift',
+		exerciseType: 'weights',
 		muscleGroups: ['back', 'glutes', 'hamstrings', 'core'],
 		equipment: 'Barbell',
 		defaultSets: 4,
@@ -116,6 +135,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'barbell-row',
 		name: 'Barbell Row',
+		exerciseType: 'weights',
 		muscleGroups: ['back', 'biceps'],
 		equipment: 'Barbell',
 		defaultSets: 4,
@@ -126,6 +146,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'pull-ups',
 		name: 'Pull-ups',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['back', 'biceps'],
 		equipment: 'Pull-up Bar',
 		defaultSets: 3,
@@ -136,6 +157,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'lat-pulldown',
 		name: 'Lat Pulldown',
+		exerciseType: 'weights',
 		muscleGroups: ['back', 'biceps'],
 		equipment: 'Cable Machine',
 		defaultSets: 4,
@@ -146,6 +168,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 't-bar-row',
 		name: 'T-Bar Row',
+		exerciseType: 'weights',
 		muscleGroups: ['back', 'biceps'],
 		equipment: 'T-Bar Machine',
 		defaultSets: 3,
@@ -156,6 +179,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'seated-cable-row',
 		name: 'Seated Cable Row',
+		exerciseType: 'weights',
 		muscleGroups: ['back', 'biceps'],
 		equipment: 'Cable Machine',
 		defaultSets: 3,
@@ -166,6 +190,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'one-arm-dumbbell-row',
 		name: 'One-Arm Dumbbell Row',
+		exerciseType: 'weights',
 		muscleGroups: ['back', 'biceps'],
 		equipment: 'Dumbbells',
 		defaultSets: 4,
@@ -176,6 +201,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'face-pulls',
 		name: 'Face Pulls',
+		exerciseType: 'weights',
 		muscleGroups: ['back', 'shoulders'],
 		equipment: 'Cable Machine',
 		defaultSets: 3,
@@ -188,6 +214,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'overhead-press',
 		name: 'Overhead Press',
+		exerciseType: 'weights',
 		muscleGroups: ['shoulders', 'triceps'],
 		equipment: 'Barbell',
 		defaultSets: 4,
@@ -198,6 +225,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'dumbbell-shoulder-press',
 		name: 'Dumbbell Shoulder Press',
+		exerciseType: 'weights',
 		muscleGroups: ['shoulders', 'triceps'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -209,6 +237,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'lateral-raises',
 		name: 'Lateral Raises',
+		exerciseType: 'weights',
 		muscleGroups: ['shoulders'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -220,6 +249,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'rear-delt-flyes',
 		name: 'Rear Delt Flyes',
+		exerciseType: 'weights',
 		muscleGroups: ['shoulders'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -230,6 +260,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'rear-delt-fly',
 		name: 'Rear Delt Fly',
+		exerciseType: 'weights',
 		muscleGroups: ['shoulders'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -240,6 +271,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'arnold-press',
 		name: 'Arnold Press',
+		exerciseType: 'weights',
 		muscleGroups: ['shoulders', 'triceps'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -252,6 +284,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'barbell-curl',
 		name: 'Barbell Curl',
+		exerciseType: 'weights',
 		muscleGroups: ['biceps'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -262,6 +295,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'dumbbell-curl',
 		name: 'Dumbbell Curl',
+		exerciseType: 'weights',
 		muscleGroups: ['biceps'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -272,6 +306,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'hammer-curl',
 		name: 'Hammer Curl',
+		exerciseType: 'weights',
 		muscleGroups: ['biceps', 'forearms'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -282,6 +317,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'cable-curl',
 		name: 'Cable Curl',
+		exerciseType: 'weights',
 		muscleGroups: ['biceps'],
 		equipment: 'Cable Machine',
 		defaultSets: 3,
@@ -292,6 +328,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'preacher-curl',
 		name: 'Preacher Curl',
+		exerciseType: 'weights',
 		muscleGroups: ['biceps'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -304,6 +341,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'close-grip-bench',
 		name: 'Close Grip Bench Press',
+		exerciseType: 'weights',
 		muscleGroups: ['triceps', 'chest'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -314,6 +352,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'tricep-dips',
 		name: 'Tricep Dips',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['triceps', 'shoulders'],
 		equipment: 'Dip Bar',
 		defaultSets: 3,
@@ -324,6 +363,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'overhead-tricep-extension',
 		name: 'Overhead Tricep Extension',
+		exerciseType: 'weights',
 		muscleGroups: ['triceps'],
 		equipment: 'Dumbbell',
 		defaultSets: 3,
@@ -334,6 +374,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'tricep-pushdown',
 		name: 'Tricep Pushdown',
+		exerciseType: 'weights',
 		muscleGroups: ['triceps'],
 		equipment: 'Cable Machine',
 		defaultSets: 3,
@@ -344,6 +385,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'skull-crushers',
 		name: 'Skull Crushers',
+		exerciseType: 'weights',
 		muscleGroups: ['triceps'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -354,6 +396,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'dumbbell-skull-crushers',
 		name: 'Dumbbell Skull Crushers',
+		exerciseType: 'weights',
 		muscleGroups: ['triceps'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -367,6 +410,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'squat',
 		name: 'Barbell Squat',
+		exerciseType: 'weights',
 		muscleGroups: ['quadriceps', 'glutes', 'hamstrings', 'core'],
 		equipment: 'Barbell',
 		defaultSets: 4,
@@ -377,6 +421,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'goblet-squat',
 		name: 'Goblet Squat',
+		exerciseType: 'weights',
 		muscleGroups: ['quadriceps', 'glutes', 'core'],
 		equipment: 'Dumbbells',
 		defaultSets: 4,
@@ -388,6 +433,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'dumbbell-front-squat',
 		name: 'Dumbbell Front Squat',
+		exerciseType: 'weights',
 		muscleGroups: ['quadriceps', 'glutes', 'core'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -398,6 +444,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'front-squat',
 		name: 'Front Squat',
+		exerciseType: 'weights',
 		muscleGroups: ['quadriceps', 'glutes', 'core'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -408,6 +455,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'leg-press',
 		name: 'Leg Press',
+		exerciseType: 'weights',
 		muscleGroups: ['quadriceps', 'glutes'],
 		equipment: 'Leg Press Machine',
 		defaultSets: 4,
@@ -418,6 +466,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'leg-extension',
 		name: 'Leg Extension',
+		exerciseType: 'weights',
 		muscleGroups: ['quadriceps'],
 		equipment: 'Leg Extension Machine',
 		defaultSets: 3,
@@ -428,6 +477,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'bulgarian-split-squat',
 		name: 'Bulgarian Split Squat',
+		exerciseType: 'weights',
 		muscleGroups: ['quadriceps', 'glutes'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -438,6 +488,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'lunges',
 		name: 'Walking Lunges',
+		exerciseType: 'weights',
 		muscleGroups: ['quadriceps', 'glutes'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -450,6 +501,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'romanian-deadlift',
 		name: 'Romanian Deadlift',
+		exerciseType: 'weights',
 		muscleGroups: ['hamstrings', 'glutes', 'back'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -460,6 +512,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'dumbbell-romanian-deadlift',
 		name: 'Dumbbell Romanian Deadlift',
+		exerciseType: 'weights',
 		muscleGroups: ['hamstrings', 'glutes', 'back'],
 		equipment: 'Dumbbells',
 		defaultSets: 4,
@@ -470,6 +523,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'leg-curl',
 		name: 'Leg Curl',
+		exerciseType: 'weights',
 		muscleGroups: ['hamstrings'],
 		equipment: 'Leg Curl Machine',
 		defaultSets: 3,
@@ -480,6 +534,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'stiff-leg-deadlift',
 		name: 'Stiff Leg Deadlift',
+		exerciseType: 'weights',
 		muscleGroups: ['hamstrings', 'glutes'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -490,6 +545,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'good-mornings',
 		name: 'Good Mornings',
+		exerciseType: 'weights',
 		muscleGroups: ['hamstrings', 'glutes', 'back'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -502,6 +558,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'hip-thrust',
 		name: 'Hip Thrust',
+		exerciseType: 'weights',
 		muscleGroups: ['glutes', 'hamstrings'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -512,6 +569,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'glute-bridge',
 		name: 'Glute Bridge',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['glutes', 'hamstrings'],
 		equipment: 'Bodyweight',
 		defaultSets: 3,
@@ -522,6 +580,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'cable-kickback',
 		name: 'Cable Kickback',
+		exerciseType: 'weights',
 		muscleGroups: ['glutes'],
 		equipment: 'Cable Machine',
 		defaultSets: 3,
@@ -534,6 +593,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'calf-raise',
 		name: 'Standing Calf Raise',
+		exerciseType: 'weights',
 		muscleGroups: ['calves'],
 		equipment: 'Calf Raise Machine',
 		defaultSets: 4,
@@ -544,6 +604,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'seated-calf-raise',
 		name: 'Seated Calf Raise',
+		exerciseType: 'weights',
 		muscleGroups: ['calves'],
 		equipment: 'Seated Calf Machine',
 		defaultSets: 3,
@@ -556,6 +617,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'plank',
 		name: 'Plank',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['core'],
 		equipment: 'Bodyweight',
 		defaultSets: 3,
@@ -566,6 +628,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'crunches',
 		name: 'Crunches',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['core'],
 		equipment: 'Bodyweight',
 		defaultSets: 3,
@@ -576,6 +639,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'russian-twists',
 		name: 'Russian Twists',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['core'],
 		equipment: 'Bodyweight',
 		defaultSets: 3,
@@ -586,6 +650,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'leg-raises',
 		name: 'Leg Raises',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['core'],
 		equipment: 'Bodyweight',
 		defaultSets: 3,
@@ -596,6 +661,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'mountain-climbers',
 		name: 'Mountain Climbers',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['core', 'shoulders'],
 		equipment: 'Bodyweight',
 		defaultSets: 3,
@@ -606,6 +672,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'ab-wheel',
 		name: 'Ab Wheel Rollout',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['core'],
 		equipment: 'Ab Wheel',
 		defaultSets: 3,
@@ -616,6 +683,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'hanging-leg-raises',
 		name: 'Hanging Leg Raises',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['core'],
 		equipment: 'Pull-up Bar',
 		defaultSets: 3,
@@ -626,6 +694,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'hanging-knee-raises',
 		name: 'Hanging Knee Raises',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['core'],
 		equipment: 'Pull-up Bar',
 		defaultSets: 3,
@@ -634,28 +703,9 @@ export const exercises: Exercise[] = [
 		instructions: 'Hang from bar, raise knees to chest'
 	},
 	{
-		id: 'dead-bug',
-		name: 'Dead Bug',
-		muscleGroups: ['core'],
-		equipment: 'Bodyweight',
-		defaultSets: 3,
-		defaultReps: 1,
-		defaultRestSeconds: 60,
-		instructions: 'Lie on back, alternate arm and leg extensions, hold 30-45 seconds'
-	},
-	{
-		id: 'hollow-hold',
-		name: 'Hollow Hold',
-		muscleGroups: ['core'],
-		equipment: 'Bodyweight',
-		defaultSets: 3,
-		defaultReps: 1,
-		defaultRestSeconds: 60,
-		instructions: 'Lie on back, lift shoulders and legs, hold 30-45 seconds'
-	},
-	{
 		id: 'back-extension',
 		name: 'Back Extension',
+		exerciseType: 'weights',
 		muscleGroups: ['back', 'glutes', 'hamstrings'],
 		equipment: 'Back Extension Machine',
 		defaultSets: 3,
@@ -666,6 +716,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'reverse-hyper',
 		name: 'Reverse Hyper',
+		exerciseType: 'weights',
 		muscleGroups: ['glutes', 'hamstrings', 'back'],
 		equipment: 'Reverse Hyper Machine',
 		defaultSets: 3,
@@ -676,66 +727,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'cable-woodchoppers',
 		name: 'Cable Woodchoppers',
-		muscleGroups: ['core', 'obliques'],
-		equipment: 'Cable Machine',
-		defaultSets: 3,
-		defaultReps: 10,
-		defaultRestSeconds: 60,
-		instructions: 'Pull cable diagonally across body, each side'
-	},
-	{
-		id: 'hanging-knee-raises',
-		name: 'Hanging Knee Raises',
-		muscleGroups: ['core'],
-		equipment: 'Pull-up Bar',
-		defaultSets: 3,
-		defaultReps: 15,
-		defaultRestSeconds: 90,
-		instructions: 'Hang from bar, raise knees to chest'
-	},
-	{
-		id: 'dead-bug',
-		name: 'Dead Bug',
-		muscleGroups: ['core'],
-		equipment: 'Bodyweight',
-		defaultSets: 3,
-		defaultReps: 1,
-		defaultRestSeconds: 60,
-		instructions: 'Lie on back, alternate arm and leg extensions, hold 30-45 seconds'
-	},
-	{
-		id: 'hollow-hold',
-		name: 'Hollow Hold',
-		muscleGroups: ['core'],
-		equipment: 'Bodyweight',
-		defaultSets: 3,
-		defaultReps: 1,
-		defaultRestSeconds: 60,
-		instructions: 'Lie on back, lift shoulders and legs, hold 30-45 seconds'
-	},
-	{
-		id: 'back-extension',
-		name: 'Back Extension',
-		muscleGroups: ['back', 'glutes', 'hamstrings'],
-		equipment: 'Back Extension Machine',
-		defaultSets: 3,
-		defaultReps: 12,
-		defaultRestSeconds: 90,
-		instructions: 'Hinge at hips, extend back against resistance'
-	},
-	{
-		id: 'reverse-hyper',
-		name: 'Reverse Hyper',
-		muscleGroups: ['glutes', 'hamstrings', 'back'],
-		equipment: 'Reverse Hyper Machine',
-		defaultSets: 3,
-		defaultReps: 12,
-		defaultRestSeconds: 90,
-		instructions: 'Lying face down, raise legs behind body'
-	},
-	{
-		id: 'cable-woodchoppers',
-		name: 'Cable Woodchoppers',
+		exerciseType: 'weights',
 		muscleGroups: ['core', 'obliques'],
 		equipment: 'Cable Machine',
 		defaultSets: 3,
@@ -748,6 +740,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'wrist-curl',
 		name: 'Wrist Curl',
+		exerciseType: 'weights',
 		muscleGroups: ['forearms'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -758,6 +751,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'reverse-wrist-curl',
 		name: 'Reverse Wrist Curl',
+		exerciseType: 'weights',
 		muscleGroups: ['forearms'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -768,6 +762,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'farmer-walk',
 		name: 'Farmer\'s Walk',
+		exerciseType: 'weights',
 		muscleGroups: ['forearms', 'core', 'traps'],
 		equipment: 'Dumbbells',
 		defaultSets: 3,
@@ -780,6 +775,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'clean-and-press',
 		name: 'Clean and Press',
+		exerciseType: 'weights',
 		muscleGroups: ['full body'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -790,6 +786,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'thrusters',
 		name: 'Thrusters',
+		exerciseType: 'weights',
 		muscleGroups: ['full body'],
 		equipment: 'Barbell',
 		defaultSets: 3,
@@ -800,6 +797,7 @@ export const exercises: Exercise[] = [
 	{
 		id: 'burpees',
 		name: 'Burpees',
+		exerciseType: 'bodyweight',
 		muscleGroups: ['full body'],
 		equipment: 'Bodyweight',
 		defaultSets: 3,
@@ -812,41 +810,41 @@ export const exercises: Exercise[] = [
 	{
 		id: 'running',
 		name: 'Running',
-		muscleGroups: ['legs', 'cardio'],
+		exerciseType: 'cardio',
+		muscleGroups: [],
 		equipment: 'None',
-		defaultSets: 1,
-		defaultReps: 1,
-		defaultRestSeconds: 0,
+		defaultDurationMinutes: 30,
+		defaultCalories: 300,
 		instructions: 'Track distance and time'
 	},
 	{
 		id: 'cycling',
 		name: 'Cycling',
-		muscleGroups: ['legs', 'cardio'],
+		exerciseType: 'cardio',
+		muscleGroups: [],
 		equipment: 'Bike',
-		defaultSets: 1,
-		defaultReps: 1,
-		defaultRestSeconds: 0,
+		defaultDurationMinutes: 30,
+		defaultCalories: 250,
 		instructions: 'Track distance, time, and resistance'
 	},
 	{
 		id: 'rowing',
 		name: 'Rowing',
-		muscleGroups: ['full body', 'cardio'],
+		exerciseType: 'cardio',
+		muscleGroups: [],
 		equipment: 'Rowing Machine',
-		defaultSets: 3,
-		defaultReps: 1,
-		defaultRestSeconds: 120,
+		defaultDurationMinutes: 20,
+		defaultCalories: 200,
 		instructions: 'Full stroke, drive with legs'
 	},
 	{
 		id: 'jump-rope',
 		name: 'Jump Rope',
-		muscleGroups: ['legs', 'cardio'],
+		exerciseType: 'cardio',
+		muscleGroups: [],
 		equipment: 'Jump Rope',
-		defaultSets: 3,
-		defaultReps: 1,
-		defaultRestSeconds: 60,
+		defaultDurationMinutes: 15,
+		defaultCalories: 150,
 		instructions: 'Track time or reps'
 	}
 ];
