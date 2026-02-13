@@ -40,13 +40,13 @@
 		return workoutDates.some((wd) => isSameDay(wd, date));
 	}
 
-	const monthStart = $derived(startOfMonth(currentMonth));
-	const monthEnd = $derived(endOfMonth(currentMonth));
-	const daysInMonth = $derived(eachDayOfInterval({ start: monthStart, end: monthEnd }));
-	const firstDayOfWeek = $derived(getDay(monthStart)); // 0 = Sunday
+	const monthStart = $derived.by(() => startOfMonth(currentMonth));
+	const monthEnd = $derived.by(() => endOfMonth(currentMonth));
+	const daysInMonth = $derived.by(() => eachDayOfInterval({ start: monthStart, end: monthEnd }));
+	const firstDayOfWeek = $derived.by(() => getDay(monthStart)); // 0 = Sunday
 
 	// Create calendar grid with empty cells for days before month start
-	const calendarDays = $derived(() => {
+	const calendarDays = $derived.by(() => {
 		const days: (Date | null)[] = [];
 		// Add empty cells for days before month start
 		for (let i = 0; i < firstDayOfWeek; i++) {
@@ -54,6 +54,11 @@
 		}
 		// Add all days in month
 		daysInMonth.forEach((day) => days.push(day));
+		// Fill remaining cells to make a complete grid (6 rows × 7 columns = 42 cells)
+		const totalCells = 42;
+		while (days.length < totalCells) {
+			days.push(null);
+		}
 		return days;
 	});
 

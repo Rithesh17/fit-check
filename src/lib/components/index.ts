@@ -9,6 +9,10 @@ export { default as SyncStatus } from './SyncStatus.svelte';
 export { default as StreakCalendar } from './StreakCalendar.svelte';
 export { default as VolumeTrendChart } from './VolumeTrendChart.svelte';
 export { default as MuscleGroupChart } from './MuscleGroupChart.svelte';
+export { default as ExerciseDetail } from './ExerciseDetail.svelte';
+export { default as ExerciseHistory } from './ExerciseHistory.svelte';
+export { default as Calculators } from './Calculators.svelte';
+export { default as ExerciseEditor } from './ExerciseEditor.svelte';
 
 // Legacy Property Components (can be removed later)
 export { default as PropertyHero } from './PropertyHero.svelte';

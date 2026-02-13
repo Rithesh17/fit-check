@@ -30,14 +30,14 @@ export const workoutTemplates: WorkoutTemplate[] = [
 		muscleGroups: ['legs'],
 		exercises: [
 			{
-				exerciseId: 'squat', // Dumbbell Goblet Squat
+				exerciseId: 'goblet-squat',
 				sets: 4,
 				reps: '6-8',
 				restSeconds: 120,
 				notes: 'Heavy but clean - use dumbbells'
 			},
 			{
-				exerciseId: 'romanian-deadlift', // Dumbbell RDL
+				exerciseId: 'dumbbell-romanian-deadlift',
 				sets: 4,
 				reps: 8,
 				restSeconds: 120,
@@ -74,21 +74,21 @@ export const workoutTemplates: WorkoutTemplate[] = [
 		muscleGroups: ['core'],
 		exercises: [
 			{
-				exerciseId: 'hanging-leg-raises', // Hanging Knee Raises or Captain's Chair
+				exerciseId: 'hanging-knee-raises',
 				sets: 3,
 				reps: '10-15',
 				restSeconds: 90,
 				notes: 'Hanging knee raises or captain\'s chair'
 			},
 			{
-				exerciseId: 'plank', // Front Plank
+				exerciseId: 'plank',
 				sets: 3,
 				reps: 1,
 				restSeconds: 60,
 				notes: 'Hold 45-60 seconds'
 			},
 			{
-				exerciseId: 'russian-twists', // Cable or Band Woodchoppers
+				exerciseId: 'cable-woodchoppers',
 				sets: 3,
 				reps: 10,
 				restSeconds: 60,
@@ -104,14 +104,14 @@ export const workoutTemplates: WorkoutTemplate[] = [
 		muscleGroups: ['chest', 'shoulders', 'triceps'],
 		exercises: [
 			{
-				exerciseId: 'bench-press', // Dumbbell Bench Press
+				exerciseId: 'dumbbell-bench-press',
 				sets: 4,
 				reps: '6-8',
 				restSeconds: 120,
 				notes: 'Use dumbbells'
 			},
 			{
-				exerciseId: 'incline-bench-press', // Incline DB Bench or Push-ups
+				exerciseId: 'incline-dumbbell-bench-press',
 				sets: 3,
 				reps: '8-10',
 				restSeconds: 90,
@@ -132,7 +132,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
 				notes: 'Control it'
 			},
 			{
-				exerciseId: 'dips', // Tricep Dips or DB Skull Crushers
+				exerciseId: 'dumbbell-skull-crushers',
 				sets: 3,
 				reps: '8-12',
 				restSeconds: 90,
@@ -155,7 +155,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
 				notes: 'Aim for 5-8 reps, assisted if needed'
 			},
 			{
-				exerciseId: 'barbell-row', // One-Arm DB Row
+				exerciseId: 'one-arm-dumbbell-row',
 				sets: 4,
 				reps: 8,
 				restSeconds: 90,
@@ -169,7 +169,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
 				notes: 'Neutral or wide grip'
 			},
 			{
-				exerciseId: 'face-pulls', // Face Pulls or Rear Delt Fly
+				exerciseId: 'rear-delt-fly',
 				sets: 3,
 				reps: '12-15',
 				restSeconds: 60,
@@ -198,14 +198,14 @@ export const workoutTemplates: WorkoutTemplate[] = [
 		muscleGroups: ['full body'],
 		exercises: [
 			{
-				exerciseId: 'plank', // Dead Bug or Hollow Hold
+				exerciseId: 'dead-bug',
 				sets: 3,
 				reps: 1,
 				restSeconds: 60,
 				notes: 'Dead bug or hollow hold - hold 30-45 seconds'
 			},
 			{
-				exerciseId: 'deadlift', // Back Extension or Reverse Hyper
+				exerciseId: 'back-extension',
 				sets: 3,
 				reps: 12,
 				restSeconds: 90,
@@ -221,14 +221,14 @@ export const workoutTemplates: WorkoutTemplate[] = [
 		muscleGroups: ['full body'],
 		exercises: [
 			{
-				exerciseId: 'front-squat', // DB Front Squat or Goblet Squat
+				exerciseId: 'dumbbell-front-squat',
 				sets: 3,
 				reps: 8,
 				restSeconds: 90,
 				notes: 'DB front squat or goblet squat'
 			},
 			{
-				exerciseId: 'romanian-deadlift', // DB RDL
+				exerciseId: 'dumbbell-romanian-deadlift',
 				sets: 3,
 				reps: 8,
 				restSeconds: 90,
@@ -255,7 +255,10 @@ export const workoutTemplates: WorkoutTemplate[] = [
 /**
  * Get all exercises for a template with full exercise details
  */
-export function getTemplateExercises(template: WorkoutTemplate): Array<{
+export function getTemplateExercises(
+	template: WorkoutTemplate,
+	customExercises: Array<Exercise & { id: string }> = []
+): Array<{
 	exercise: Exercise;
 	sets: number;
 	reps: number | string;
@@ -264,7 +267,7 @@ export function getTemplateExercises(template: WorkoutTemplate): Array<{
 }> {
 	return template.exercises
 		.map((templateEx) => {
-			const exercise = getExerciseById(templateEx.exerciseId);
+			const exercise = getExerciseById(templateEx.exerciseId) || customExercises.find(ce => ce.id === templateEx.exerciseId);
 			if (!exercise) return null;
 			return {
 				exercise,
@@ -280,34 +283,63 @@ export function getTemplateExercises(template: WorkoutTemplate): Array<{
 /**
  * Convert template to workout format
  */
-export function templateToWorkoutExercises(template: WorkoutTemplate): Array<{
+export function templateToWorkoutExercises(
+	template: WorkoutTemplate,
+	customExercises: Array<Exercise & { id: string }> = []
+): Array<{
 	exercise: Exercise;
-	sets: Array<{ reps: number; weight: number; rest: number; completed: boolean }>;
+	exerciseType: 'weights' | 'bodyweight' | 'cardio' | 'stretches';
+	sets?: Array<{ reps: number; weight: number; rest: number; completed: boolean }>;
+	durationMinutes?: number;
+	calories?: number;
+	durationSeconds?: number;
+	reps?: number;
+	completed?: boolean;
 }> {
-	return getTemplateExercises(template).map(({ exercise, sets, reps, restSeconds }) => {
-		// Parse reps - handle "6-8", "max reps", or number
-		let defaultReps = exercise.defaultReps;
-		if (typeof reps === 'string') {
-			if (reps.includes('-')) {
-				// Take the lower number for default
-				const [min] = reps.split('-').map(Number);
-				defaultReps = min || exercise.defaultReps;
-			} else if (reps.toLowerCase().includes('max')) {
-				// Use exercise default for max reps
-				defaultReps = exercise.defaultReps;
-			}
-		} else {
-			defaultReps = reps;
-		}
-
-		return {
-			exercise,
-			sets: Array.from({ length: sets }, () => ({
-				reps: defaultReps,
-				weight: 0,
-				rest: restSeconds,
+	return getTemplateExercises(template, customExercises).map(({ exercise, sets, reps, restSeconds }) => {
+		if (exercise.exerciseType === 'cardio') {
+			return {
+				exercise,
+				exerciseType: 'cardio' as const,
+				durationMinutes: exercise.defaultDurationMinutes || 30,
+				calories: exercise.defaultCalories || 300,
 				completed: false
-			}))
-		};
+			};
+		} else if (exercise.exerciseType === 'stretches') {
+			return {
+				exercise,
+				exerciseType: 'stretches' as const,
+				durationSeconds: exercise.defaultDurationSeconds || 60,
+				reps: exercise.defaultRepsStretches || 10,
+				completed: false
+			};
+		} else {
+			// Weights or bodyweight
+			// Parse reps - handle "6-8", "max reps", or number
+			let defaultReps = exercise.defaultReps || 10;
+			if (typeof reps === 'string') {
+				if (reps.includes('-')) {
+					// Take the lower number for default
+					const [min] = reps.split('-').map(Number);
+					defaultReps = min || exercise.defaultReps || 10;
+				} else if (reps.toLowerCase().includes('max')) {
+					// Use exercise default for max reps
+					defaultReps = exercise.defaultReps || 10;
+				}
+			} else {
+				defaultReps = reps || exercise.defaultReps || 10;
+			}
+
+			return {
+				exercise,
+				exerciseType: (exercise.exerciseType === 'bodyweight' ? 'bodyweight' : 'weights') as const,
+				sets: Array.from({ length: sets || exercise.defaultSets || 3 }, () => ({
+					reps: defaultReps,
+					weight: 0,
+					rest: restSeconds || exercise.defaultRestSeconds || 60,
+					completed: false
+				}))
+			};
+		}
 	});
 }
