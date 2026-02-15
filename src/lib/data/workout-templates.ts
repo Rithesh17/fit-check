@@ -249,6 +249,404 @@ export const workoutTemplates: WorkoutTemplate[] = [
 				notes: '40-60 seconds per round - core + grip + fat loss'
 			}
 		]
+	},
+	// PPL CORE WORKOUTS - 6 Day Split
+	// Day 1: Push(Primary)
+	{
+		id: 'ppl-push-day1',
+		name: 'Push(Day 1)',
+		description: 'Chest, shoulders, and triceps - Primary push day',
+		muscleGroups: ['chest', 'shoulders', 'triceps'],
+		exercises: [
+			{
+				exerciseId: 'dumbbell-bench-press',
+				sets: 4,
+				reps: '6-8',
+				restSeconds: 120,
+				notes: 'Primary: Chest. Focus on form, progressive overload'
+			},
+			{
+				exerciseId: 'incline-dumbbell-bench-press',
+				sets: 3,
+				reps: '8-10',
+				restSeconds: 90,
+				notes: 'Primary: Chest. Upper chest focus'
+			},
+			{
+				exerciseId: 'dumbbell-shoulder-press',
+				sets: 3,
+				reps: '8-10',
+				restSeconds: 90,
+				notes: 'Primary: Shoulders. Seated or standing'
+			},
+			{
+				exerciseId: 'lateral-raises',
+				sets: 3,
+				reps: '12-15',
+				restSeconds: 60,
+				notes: 'Primary: Shoulders. Control the movement'
+			},
+			{
+				exerciseId: 'dumbbell-skull-crushers',
+				sets: 3,
+				reps: '10-12',
+				restSeconds: 90,
+				notes: 'Primary: Triceps. Lower dumbbells to forehead'
+			},
+			{
+				exerciseId: 'overhead-tricep-extension',
+				sets: 3,
+				reps: '10-12',
+				restSeconds: 60,
+				notes: 'Primary: Triceps. Full stretch and contraction'
+			},
+			{
+				exerciseId: 'plank',
+				sets: 3,
+				reps: 1,
+				restSeconds: 60,
+				notes: 'Core. Hold 60 seconds'
+			},
+		]
+	},
+	// Day 2: Pull + Core (Primary)
+	{
+		id: 'ppl-pull-day2',
+		name: 'Pull + Core (Day 2)',
+		description: 'Back, biceps, and core - Primary pull day',
+		muscleGroups: ['back', 'biceps', 'core'],
+		exercises: [
+			{
+				exerciseId: 'pull-ups',
+				sets: 4,
+				reps: 2,
+				restSeconds: 120,
+				notes: 'Primary: Back. Aim for 5-8 reps, assisted if needed'
+			},
+			{
+				exerciseId: 'one-arm-dumbbell-row',
+				sets: 4,
+				reps: 8,
+				restSeconds: 90,
+				notes: 'Primary: Back. Each side, bent over position'
+			},
+			{
+				exerciseId: 'rear-delt-flyes',
+				sets: 3,
+				reps: '12-15',
+				restSeconds: 60,
+				notes: 'Primary: Shoulders. Bent over, target rear delts'
+			},
+			{
+				exerciseId: 'dumbbell-curl',
+				sets: 3,
+				reps: '10-12',
+				restSeconds: 60,
+				notes: 'Primary: Biceps. Alternate or together'
+			},
+			{
+				exerciseId: 'hammer-curl',
+				sets: 3,
+				reps: '10-12',
+				restSeconds: 60,
+				notes: 'Primary: Biceps. Neutral grip, targets brachialis'
+			},
+			{
+				exerciseId: 'leg-raises',
+				sets: 3,
+				reps: 15,
+				restSeconds: 60,
+				notes: 'Core. Lift legs to 90°, control descent'
+			},
+			{
+				exerciseId: 'plank',
+				sets: 3,
+				reps: 1,
+				restSeconds: 60,
+				notes: 'Core. Hold 60 seconds'
+			},
+			{
+				exerciseId: 'cable-woodchoppers',
+				sets: 3,
+				reps: 10,
+				restSeconds: 60,
+				notes: 'Core. Pull cable diagonally across body, each side (if available)'
+			},
+			{
+				exerciseId: 'russian-twists',
+				sets: 3,
+				reps: 20,
+				restSeconds: 45,
+				notes: 'Core. Rotate torso, keep feet off ground'
+			}
+		]
+	},
+	// Day 3: Legs(Primary)
+	{
+		id: 'ppl-legs-day3',
+		name: 'Legs(Day 3)',
+		description: 'Quads, hamstrings, and calves - Primary leg day',
+		muscleGroups: ['quadriceps', 'hamstrings', 'calves'],
+		exercises: [
+			{
+				exerciseId: 'goblet-squat',
+				sets: 4,
+				reps: 8,
+				restSeconds: 120,
+				notes: 'Primary: Quadriceps. Hold dumbbell at chest, squat deep'
+			},
+			{
+				exerciseId: 'dumbbell-front-squat',
+				sets: 3,
+				reps: 8,
+				restSeconds: 90,
+				notes: 'Primary: Quadriceps. Hold dumbbells at shoulders'
+			},
+			{
+				exerciseId: 'bulgarian-split-squat',
+				sets: 3,
+				reps: 10,
+				restSeconds: 90,
+				notes: 'Primary: Quadriceps. Each leg, rear foot elevated'
+			},
+			{
+				exerciseId: 'dumbbell-romanian-deadlift',
+				sets: 4,
+				reps: 8,
+				restSeconds: 120,
+				notes: 'Primary: Hamstrings. Hinge at hips, stretch hamstrings'
+			},
+			{
+				exerciseId: 'lunges',
+				sets: 3,
+				reps: 12,
+				restSeconds: 90,
+				notes: 'Primary: Quadriceps. Each leg, step forward'
+			},
+			{
+				exerciseId: 'calf-raise',
+				sets: 3,
+				reps: 15,
+				restSeconds: 45,
+				notes: 'Primary: Calves. Use dumbbells, full range of motion'
+			},
+			{
+				exerciseId: 'plank',
+				sets: 3,
+				reps: 1,
+				restSeconds: 60,
+				notes: 'Core. Hold 60 seconds'
+			},
+		]
+	},
+	// Day 4: Push + Core (Varied)
+	{
+		id: 'ppl-push-day4',
+		name: 'Push + Core (Day 4)',
+		description: 'Chest, shoulders, triceps, and core - Varied push day',
+		muscleGroups: ['chest', 'shoulders', 'triceps', 'core'],
+		exercises: [
+			{
+				exerciseId: 'dumbbell-flyes',
+				sets: 3,
+				reps: 12,
+				restSeconds: 60,
+				notes: 'Primary: Chest. Arms wide arc, feel chest stretch'
+			},
+			{
+				exerciseId: 'push-ups',
+				sets: 3,
+				reps: 15,
+				restSeconds: 60,
+				notes: 'Primary: Chest. Keep core tight, full range of motion'
+			},
+			{
+				exerciseId: 'arnold-press',
+				sets: 3,
+				reps: 10,
+				restSeconds: 90,
+				notes: 'Primary: Shoulders. Start with palms facing, rotate and press'
+			},
+			{
+				exerciseId: 'rear-delt-fly',
+				sets: 3,
+				reps: '12-15',
+				restSeconds: 60,
+				notes: 'Primary: Shoulders. Bent over, target rear delts'
+			},
+			{
+				exerciseId: 'tricep-dips',
+				sets: 3,
+				reps: 12,
+				restSeconds: 90,
+				notes: 'Primary: Triceps. Keep body upright, focus on triceps (if dip bar available)'
+			},
+			{
+				exerciseId: 'overhead-tricep-extension',
+				sets: 3,
+				reps: '10-12',
+				restSeconds: 60,
+				notes: 'Primary: Triceps. Full stretch and contraction'
+			},
+			{
+				exerciseId: 'russian-twists',
+				sets: 3,
+				reps: 20,
+				restSeconds: 45,
+				notes: 'Core. Rotate torso, keep feet off ground'
+			},
+			{
+				exerciseId: 'crunches',
+				sets: 3,
+				reps: 20,
+				restSeconds: 45,
+				notes: 'Core. Curl up, don\'t pull on neck'
+			},
+			{
+				exerciseId: 'ab-wheel',
+				sets: 3,
+				reps: 10,
+				restSeconds: 90,
+				notes: 'Core. Roll out slowly, keep core engaged (if available)'
+			},
+			{
+				exerciseId: 'hanging-leg-raises',
+				sets: 3,
+				reps: 12,
+				restSeconds: 90,
+				notes: 'Core. Hang from bar, raise legs to parallel'
+			},
+		]
+	},
+	// Day 5: Pull(Varied)
+	{
+		id: 'ppl-pull-day5',
+		name: 'Pull(Day 5)',
+		description: 'Back, and biceps - Varied pull day',
+		muscleGroups: ['back', 'biceps'],
+		exercises: [
+			{
+				exerciseId: 'one-arm-dumbbell-row',
+				sets: 4,
+				reps: 8,
+				restSeconds: 90,
+				notes: 'Primary: Back. Each side, different angle/focus'
+			},
+			{
+				exerciseId: 'pull-ups',
+				sets: 3,
+				reps: 'max reps',
+				restSeconds: 120,
+				notes: 'Primary: Back. Aim for 5-8 reps'
+			},
+			{
+				exerciseId: 'rear-delt-fly',
+				sets: 3,
+				reps: '12-15',
+				restSeconds: 60,
+				notes: 'Primary: Shoulders. Bent over, target rear delts'
+			},
+			{
+				exerciseId: 'hammer-curl',
+				sets: 3,
+				reps: '10-12',
+				restSeconds: 60,
+				notes: 'Primary: Biceps. Neutral grip'
+			},
+			{
+				exerciseId: 'dumbbell-curl',
+				sets: 3,
+				reps: '10-12',
+				restSeconds: 60,
+				notes: 'Primary: Biceps. Alternate or together'
+			},
+			{
+				exerciseId: 'plank',
+				sets: 3,
+				reps: 1,
+				restSeconds: 60,
+				notes: 'Core. Hold 60 seconds, variations if desired'
+			},
+		]
+	},
+	// Day 6: Legs + Core (Varied)
+	{
+		id: 'ppl-legs-day6',
+		name: 'Legs + Core (Day 6)',
+		description: 'Quads, hamstrings, calves, and core - Varied leg day',
+		muscleGroups: ['quadriceps', 'hamstrings', 'calves', 'core'],
+		exercises: [
+			{
+				exerciseId: 'dumbbell-front-squat',
+				sets: 4,
+				reps: 8,
+				restSeconds: 90,
+				notes: 'Primary: Quadriceps. Hold dumbbells at shoulders'
+			},
+			{
+				exerciseId: 'goblet-squat',
+				sets: 3,
+				reps: 10,
+				restSeconds: 120,
+				notes: 'Primary: Quadriceps. Hold dumbbell at chest'
+			},
+			{
+				exerciseId: 'lunges',
+				sets: 3,
+				reps: 12,
+				restSeconds: 90,
+				notes: 'Primary: Quadriceps. Each leg, walking lunges'
+			},
+			{
+				exerciseId: 'dumbbell-romanian-deadlift',
+				sets: 4,
+				reps: 8,
+				restSeconds: 120,
+				notes: 'Primary: Hamstrings. Hinge at hips, stretch hamstrings'
+			},
+			{
+				exerciseId: 'bulgarian-split-squat',
+				sets: 3,
+				reps: 10,
+				restSeconds: 90,
+				notes: 'Primary: Quadriceps. Each leg, rear foot elevated'
+			},
+			{
+				exerciseId: 'calf-raise',
+				sets: 3,
+				reps: 15,
+				restSeconds: 45,
+				notes: 'Primary: Calves. Use dumbbells, full range of motion'
+			},
+			{
+				exerciseId: 'mountain-climbers',
+				sets: 3,
+				reps: 20,
+				restSeconds: 45,
+				notes: 'Core. Alternate knees, keep core tight'
+			},
+			{
+				exerciseId: 'russian-twists',
+				sets: 3,
+				reps: 20,
+				restSeconds: 45,
+				notes: 'Core. Rotate torso, keep feet off ground'
+			},
+			{
+				exerciseId: 'plank',
+				sets: 3,
+				reps: 1,
+				restSeconds: 60,
+				notes: 'Core. Hold 60 seconds'
+			},
+			{
+				exerciseId: 'leg-raises',
+				sets: 3,
+				reps: 15,
+				restSeconds: 60,
+				notes: 'Core. Lift legs to 90°, control descent'
+			}
+		]
 	}
 ];
 
@@ -332,7 +730,7 @@ export function templateToWorkoutExercises(
 
 			return {
 				exercise,
-				exerciseType: (exercise.exerciseType === 'bodyweight' ? 'bodyweight' : 'weights') as const,
+				exerciseType: exercise.exerciseType === 'bodyweight' ? ('bodyweight' as const) : ('weights' as const),
 				sets: Array.from({ length: sets || exercise.defaultSets || 3 }, () => ({
 					reps: defaultReps,
 					weight: 0,

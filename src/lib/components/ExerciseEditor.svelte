@@ -27,6 +27,7 @@
 	// Form state
 	let name = $state('');
 	let exerciseType = $state<ExerciseType>('weights');
+	let primaryMuscleGroup = $state('');
 	let muscleGroups = $state<string[]>([]);
 	let equipment = $state('');
 	let customEquipment = $state('');
@@ -118,6 +119,7 @@
 					const mergedExercise = mergeExerciseWithOverride(exercise, override);
 					name = mergedExercise.name;
 					exerciseType = mergedExercise.exerciseType;
+					primaryMuscleGroup = mergedExercise.primaryMuscleGroup || '';
 					muscleGroups = [...mergedExercise.muscleGroups];
 					equipment = mergedExercise.equipment;
 					showCustomEquipment = !equipmentOptions.includes(equipment);
@@ -141,6 +143,7 @@
 					// Custom exercise - use as-is
 					name = exercise.name;
 					exerciseType = exercise.exerciseType;
+					primaryMuscleGroup = exercise.primaryMuscleGroup || '';
 					muscleGroups = [...exercise.muscleGroups];
 					equipment = exercise.equipment;
 					showCustomEquipment = !equipmentOptions.includes(equipment);
@@ -164,6 +167,7 @@
 				// New exercise
 				name = '';
 				exerciseType = 'weights';
+				primaryMuscleGroup = '';
 				muscleGroups = [];
 				equipment = '';
 				showCustomEquipment = false;
@@ -235,9 +239,15 @@
 				return;
 			}
 			
-			if ((exerciseType === 'weights' || exerciseType === 'bodyweight') && muscleGroups.length === 0) {
-				alert('Please select at least one muscle group');
-				return;
+			if ((exerciseType === 'weights' || exerciseType === 'bodyweight')) {
+				if (!primaryMuscleGroup) {
+					alert('Please select a primary muscle group');
+					return;
+				}
+				if (muscleGroups.length === 0) {
+					alert('Please select at least one muscle group');
+					return;
+				}
 			}
 
 			try {
@@ -604,10 +614,39 @@
 				<!-- Muscle Groups (only for weights and bodyweight) -->
 				{#if (exerciseType === 'weights' || exerciseType === 'bodyweight') && (isCustom || exercise)}
 					<div>
-						<label class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-							Muscle Groups {isCustom ? '*' : ''}
-						</label>
-						{#if isCustom}
+						<!-- Primary Muscle Group -->
+						<div class="mb-4">
+							<label class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+								Primary Muscle Group {isCustom ? '*' : ''}
+							</label>
+							{#if isCustom}
+								<select
+									bind:value={primaryMuscleGroup}
+									class="w-full px-3 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+								>
+									<option value="">Select primary muscle group</option>
+									{#each availableMuscleGroups as mg}
+										<option value={mg}>{mg.charAt(0).toUpperCase() + mg.slice(1)}</option>
+									{/each}
+								</select>
+							{:else}
+								<div class="px-3 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg">
+									<span class="text-[var(--color-foreground)]">
+										{primaryMuscleGroup ? primaryMuscleGroup.charAt(0).toUpperCase() + primaryMuscleGroup.slice(1) : 'Not set'}
+									</span>
+								</div>
+								<p class="text-xs text-[var(--color-muted)] mt-1">
+									Primary muscle group cannot be changed for default exercises
+								</p>
+							{/if}
+						</div>
+						
+						<!-- Secondary Muscle Groups -->
+						<div>
+							<label class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+								Secondary Muscle Groups {isCustom ? '*' : ''}
+							</label>
+							{#if isCustom}
 							<div class="flex gap-2 mb-2">
 								<select
 									bind:value={newMuscleGroup}
@@ -615,7 +654,7 @@
 								>
 									<option value="">Select muscle group</option>
 									{#each availableMuscleGroups as mg}
-										{#if !muscleGroups.includes(mg)}
+										{#if !muscleGroups.includes(mg) && mg !== primaryMuscleGroup}
 											<option value={mg}>{mg.charAt(0).toUpperCase() + mg.slice(1)}</option>
 										{/if}
 									{/each}
@@ -630,7 +669,7 @@
 							</div>
 						{/if}
 						<div class="flex flex-wrap gap-2">
-							{#each muscleGroups as mg}
+							{#each muscleGroups.filter(mg => mg !== primaryMuscleGroup) as mg}
 								<span class="px-3 py-1.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded-full flex items-center gap-2">
 									{mg}
 									{#if isCustom}
@@ -643,12 +682,16 @@
 									{/if}
 								</span>
 							{/each}
+							{#if muscleGroups.filter(mg => mg !== primaryMuscleGroup).length === 0}
+								<p class="text-sm text-[var(--color-muted)] italic">No secondary muscle groups</p>
+							{/if}
 						</div>
 						{#if !isCustom}
 							<p class="text-xs text-[var(--color-muted)] mt-1">
-								Muscle groups cannot be changed for default exercises
+								Secondary muscle groups cannot be changed for default exercises
 							</p>
 						{/if}
+						</div>
 					</div>
 				{/if}
 

@@ -25,7 +25,8 @@
 		const patterns = [
 			/youtube\.com\/watch\?v=([a-zA-Z0-9_-]+)/,
 			/youtu\.be\/([a-zA-Z0-9_-]+)/,
-			/youtube\.com\/embed\/([a-zA-Z0-9_-]+)/
+			/youtube\.com\/embed\/([a-zA-Z0-9_-]+)/,
+			/youtube\.com\/shorts\/([a-zA-Z0-9_-]+)/
 		];
 
 		for (const pattern of patterns) {
@@ -230,13 +231,34 @@
 					{#if exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight'}
 						<div>
 							<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-3">Muscle Groups</h3>
-							<div class="flex flex-wrap gap-2">
-								{#each exercise.muscleGroups as muscleGroup}
-									<span class="px-3 py-1.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-sm font-medium rounded-full">
-										{muscleGroup}
+							{#if exercise.primaryMuscleGroup}
+								<div class="mb-3">
+									<p class="text-sm text-[var(--color-muted)] mb-2">Primary:</p>
+									<span class="px-3 py-1.5 bg-[var(--color-primary)] text-white text-sm font-semibold rounded-full">
+										{exercise.primaryMuscleGroup}
 									</span>
-								{/each}
-							</div>
+								</div>
+								{#if exercise.muscleGroups.filter(mg => mg !== exercise.primaryMuscleGroup).length > 0}
+									<div>
+										<p class="text-sm text-[var(--color-muted)] mb-2">Also works:</p>
+										<div class="flex flex-wrap gap-2">
+											{#each exercise.muscleGroups.filter(mg => mg !== exercise.primaryMuscleGroup) as muscleGroup}
+												<span class="px-3 py-1.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-sm font-medium rounded-full">
+													{muscleGroup}
+												</span>
+											{/each}
+										</div>
+									</div>
+								{/if}
+							{:else}
+								<div class="flex flex-wrap gap-2">
+									{#each exercise.muscleGroups as muscleGroup}
+										<span class="px-3 py-1.5 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-sm font-medium rounded-full">
+											{muscleGroup}
+										</span>
+									{/each}
+								</div>
+							{/if}
 						</div>
 					{/if}
 

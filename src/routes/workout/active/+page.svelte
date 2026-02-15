@@ -59,6 +59,51 @@
 		})
 	);
 
+	// Get next exercise in circuit order
+	const nextExerciseInCircuit = $derived.by(() => {
+		if (!showRestTimer || !isRestBetweenExercises) return null;
+		
+		// Find next exercise with same set index that's not completed
+		for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') && 
+				currentSetIndex < ex.sets.length) {
+				const set = ex.sets[currentSetIndex];
+				if (!set.completed) {
+					return {
+						exercise: ex.exercise,
+						exerciseData: ex,
+						exerciseIndex: exIdx,
+						setIndex: currentSetIndex,
+						set: set
+					};
+				}
+			}
+		}
+		
+		// No more exercises with this set index, move to next set round
+		const nextSetIndex = currentSetIndex + 1;
+		for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+				if (nextSetIndex < ex.sets.length) {
+					const set = ex.sets[nextSetIndex];
+					if (!set.completed) {
+						return {
+							exercise: ex.exercise,
+							exerciseData: ex,
+							exerciseIndex: exIdx,
+							setIndex: nextSetIndex,
+							set: set
+						};
+					}
+				}
+			}
+		}
+		
+		return null;
+	});
+
 	async function loadCustomExercises() {
 		try {
 			const { data, error } = await supabase
@@ -148,6 +193,9 @@
 					return;
 				}
 				
+				// Initialize to first incomplete set in circuit order
+				initializeCircuitPosition();
+				
 				workoutStartTime = new Date();
 				startDurationTimer();
 				
@@ -217,6 +265,43 @@
 		return `${mins}:${secs.toString().padStart(2, '0')}`;
 	}
 
+	/**
+	 * Initialize circuit position to first incomplete set
+	 */
+	function initializeCircuitPosition() {
+		// Find first incomplete set in circuit order (round by round)
+		const maxSets = Math.max(...selectedExercises
+			.filter(ex => ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight')
+			.map(ex => ex.sets.length), 0);
+		
+		for (let setIdx = 0; setIdx < maxSets; setIdx++) {
+			for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
+				const ex = selectedExercises[exIdx];
+				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+					if (setIdx < ex.sets.length) {
+						const set = ex.sets[setIdx];
+						if (!set.completed) {
+							currentExerciseIndex = exIdx;
+							currentSetIndex = setIdx;
+							return;
+						}
+					}
+				} else if (ex.exerciseType === 'cardio' || ex.exerciseType === 'stretches') {
+					// For cardio/stretches, check if not completed
+					if (!ex.completed && setIdx === 0) {
+						currentExerciseIndex = exIdx;
+						currentSetIndex = 0;
+						return;
+					}
+				}
+			}
+		}
+		
+		// All sets completed, start at first exercise
+		currentExerciseIndex = 0;
+		currentSetIndex = 0;
+	}
+
 	function startCardioTimer() {
 		// Clear any existing timer
 		if (cardioTimerInterval) {
@@ -254,14 +339,8 @@
 			// Mark set as completed
 			updateSetValue('completed', true);
 
-			// Show rest timer if there's a next set (auto-start)
-			const nextSetIndex = currentSetIndex + 1;
-			if (nextSetIndex < currentEx.sets.length) {
-				showRestTimer = true;
-			} else {
-				// Move to next exercise or finish
-				moveToNextExercise();
-			}
+			// Circuit-style: Move to same set index of next exercise, or next set round
+			moveToNextInCircuit();
 		} else {
 			// Cardio or stretches - mark as completed and move to next
 			selectedExercises = selectedExercises.map((ex, idx) => {
@@ -272,6 +351,64 @@
 			});
 			moveToNextExercise();
 		}
+	}
+
+	/**
+	 * Circuit-style progression: Move to same set index of next exercise, or next set round
+	 */
+	function moveToNextInCircuit() {
+		showRestTimer = false;
+		isRestBetweenExercises = false;
+		
+		// Find next exercise with same set index that's not completed
+		for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			// Check if exercise has weights/bodyweight with same set index available
+			if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') && 
+				currentSetIndex < ex.sets.length) {
+				const set = ex.sets[currentSetIndex];
+				if (!set.completed) {
+					// Show rest timer between exercises
+					if (restDurationBetweenExercises > 0) {
+						showRestTimer = true;
+						isRestBetweenExercises = true;
+					} else {
+						// No rest, move directly
+						currentExerciseIndex = exIdx;
+						// Keep same set index
+					}
+					return;
+				}
+			}
+		}
+		
+		// No more exercises with this set index, move to next set round (set index + 1)
+		const nextSetIndex = currentSetIndex + 1;
+		
+		// Find first exercise with next set index that's not completed
+		for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+				if (nextSetIndex < ex.sets.length) {
+					const set = ex.sets[nextSetIndex];
+					if (!set.completed) {
+						// Show rest timer between exercises
+						if (restDurationBetweenExercises > 0) {
+							showRestTimer = true;
+							isRestBetweenExercises = true;
+						} else {
+							// No rest, move directly
+							currentExerciseIndex = exIdx;
+							currentSetIndex = nextSetIndex;
+						}
+						return;
+					}
+				}
+			}
+		}
+		
+		// All sets completed, finish workout
+		finishWorkout(true);
 	}
 
 	function moveToNextExercise() {
@@ -319,20 +456,53 @@
 	function skipRest() {
 		showRestTimer = false;
 		
-		// Check if we're skipping rest between exercises
+		// Check if we're skipping rest between exercises (circuit mode)
 		if (isRestBetweenExercises) {
 			isRestBetweenExercises = false;
-			handleRestComplete();
+			// Move to next exercise with same set index, or next set round
+			for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+				const ex = selectedExercises[exIdx];
+				if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') && 
+					currentSetIndex < ex.sets.length) {
+					const set = ex.sets[currentSetIndex];
+					if (!set.completed) {
+						currentExerciseIndex = exIdx;
+						// Keep same set index
+						return;
+					}
+				}
+			}
+			
+			// No more exercises with this set index, move to next set round
+			const nextSetIndex = currentSetIndex + 1;
+			for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
+				const ex = selectedExercises[exIdx];
+				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+					if (nextSetIndex < ex.sets.length) {
+						const set = ex.sets[nextSetIndex];
+						if (!set.completed) {
+							currentExerciseIndex = exIdx;
+							currentSetIndex = nextSetIndex;
+							// Start cardio timer if needed (though unlikely in circuit mode)
+							if (ex.exerciseType === 'cardio') {
+								startCardioTimer();
+							}
+							return;
+						}
+					}
+				}
+			}
+			
+			// All sets completed
+			finishWorkout(true);
 			return;
 		}
 		
-		// Otherwise, we're skipping rest between sets
+		// Legacy: skipping rest between sets (shouldn't happen in circuit mode)
 		const currentEx = currentExerciseData;
 		if (currentEx && (currentEx.exerciseType === 'weights' || currentEx.exerciseType === 'bodyweight')) {
-			// Check if there are more sets in current exercise
 			const nextSetIndex = currentSetIndex + 1;
 			if (nextSetIndex < currentEx.sets.length) {
-				// Move to next set
 				currentSetIndex = nextSetIndex;
 				return;
 			}
@@ -343,13 +513,11 @@
 		if (nextExerciseIndex < selectedExercises.length) {
 			currentExerciseIndex = nextExerciseIndex;
 			currentSetIndex = 0;
-			// Start cardio timer if next exercise is cardio
 			if (selectedExercises[nextExerciseIndex]?.exerciseType === 'cardio') {
 				startCardioTimer();
 			}
 		} else {
-			// This is the last exercise, finish the workout
-			finishWorkout(true); // Skip confirmation when auto-finishing
+			finishWorkout(true);
 		}
 	}
 
@@ -483,37 +651,80 @@
 
 	function handleSetRestComplete() {
 		showRestTimer = false;
-		isRestBetweenExercises = false;
+		// Note: This is for rest between sets (legacy - shouldn't happen in circuit mode)
+		// In circuit mode, we use handleRestComplete for rest between exercises
 		const currentEx = currentExerciseData;
-		
 		if (currentEx && (currentEx.exerciseType === 'weights' || currentEx.exerciseType === 'bodyweight')) {
-			// Move to next set in current exercise
 			const nextSetIndex = currentSetIndex + 1;
 			if (nextSetIndex < currentEx.sets.length) {
 				currentSetIndex = nextSetIndex;
 				return;
 			}
 		}
-		
-		// If no more sets, move to next exercise
 		handleRestComplete();
 	}
 
 	function handleRestComplete() {
 		showRestTimer = false;
+		const wasRestBetweenExercises = isRestBetweenExercises;
 		isRestBetweenExercises = false;
-		// Move to next exercise
-		const nextExerciseIndex = currentExerciseIndex + 1;
-		if (nextExerciseIndex < selectedExercises.length) {
-			currentExerciseIndex = nextExerciseIndex;
-			currentSetIndex = 0;
-			// Start cardio timer if next exercise is cardio
-			if (selectedExercises[nextExerciseIndex]?.exerciseType === 'cardio') {
-				startCardioTimer();
+		
+		// Circuit-style progression: Move to same set index of next exercise, or next set round
+		if (wasRestBetweenExercises) {
+			// Rest between exercises in circuit mode - move to next exercise with same set index
+			for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+				const ex = selectedExercises[exIdx];
+				if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') && 
+					currentSetIndex < ex.sets.length) {
+					const set = ex.sets[currentSetIndex];
+					if (!set.completed) {
+						currentExerciseIndex = exIdx;
+						// Keep same set index (same round)
+						// Start cardio timer if needed (though unlikely in circuit mode)
+						if (ex.exerciseType === 'cardio') {
+							startCardioTimer();
+						}
+						return;
+					}
+				}
 			}
+			
+			// No more exercises with this set index, move to next set round
+			const nextSetIndex = currentSetIndex + 1;
+			for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
+				const ex = selectedExercises[exIdx];
+				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+					if (nextSetIndex < ex.sets.length) {
+						const set = ex.sets[nextSetIndex];
+						if (!set.completed) {
+							currentExerciseIndex = exIdx;
+							currentSetIndex = nextSetIndex;
+							// Start cardio timer if needed
+							if (ex.exerciseType === 'cardio') {
+								startCardioTimer();
+							}
+							return;
+						}
+					}
+				}
+			}
+			
+			// All sets completed
+			finishWorkout(true);
 		} else {
-			// This is the last exercise, finish the workout
-			finishWorkout();
+			// Legacy mode: Move to next exercise (not circuit mode)
+			const nextExerciseIndex = currentExerciseIndex + 1;
+			if (nextExerciseIndex < selectedExercises.length) {
+				currentExerciseIndex = nextExerciseIndex;
+				currentSetIndex = 0;
+				// Start cardio timer if next exercise is cardio
+				if (selectedExercises[nextExerciseIndex]?.exerciseType === 'cardio') {
+					startCardioTimer();
+				}
+			} else {
+				// This is the last exercise, finish the workout
+				finishWorkout();
+			}
 		}
 	}
 </script>
@@ -558,6 +769,72 @@
 				soundEnabled={true}
 				vibrationEnabled={true}
 			/>
+			
+			<!-- Up Next Section -->
+			{#if nextExerciseInCircuit}
+				<div class="fitness-card border-2 border-[var(--color-primary)]/50 bg-[var(--color-primary)]/5">
+					<h3 class="text-sm font-semibold text-[var(--color-muted)] mb-3 uppercase tracking-wide">
+						Up Next
+					</h3>
+					<div class="space-y-3">
+						<!-- Exercise Name -->
+						<div>
+							<h4 class="text-xl font-bold text-[var(--color-foreground)] mb-2">
+								{nextExerciseInCircuit.exercise.name}
+							</h4>
+							{#if nextExerciseInCircuit.exercise.muscleGroups && nextExerciseInCircuit.exercise.muscleGroups.length > 0}
+								<div class="flex flex-wrap gap-2 mb-2">
+									{#each nextExerciseInCircuit.exercise.muscleGroups as mg}
+										<span class="px-2 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-xs rounded-full">
+											{mg}
+										</span>
+									{/each}
+								</div>
+							{/if}
+							<div class="text-sm text-[var(--color-muted)]">
+								{nextExerciseInCircuit.exerciseData.exerciseType ? nextExerciseInCircuit.exerciseData.exerciseType.charAt(0).toUpperCase() + nextExerciseInCircuit.exerciseData.exerciseType.slice(1) : ''} • {nextExerciseInCircuit.exercise.equipment}
+							</div>
+						</div>
+						
+						<!-- Set Information -->
+						{#if nextExerciseInCircuit.set}
+							<div class="pt-3 border-t border-[var(--color-border)] space-y-2">
+								<div class="flex items-center justify-between">
+									<span class="text-sm font-semibold text-[var(--color-muted)]">Round</span>
+									<span class="text-lg font-bold text-[var(--color-primary)]">
+										{nextExerciseInCircuit.setIndex + 1}
+									</span>
+								</div>
+								<div class="flex items-center justify-between">
+									<span class="text-sm font-semibold text-[var(--color-muted)]">Set</span>
+									<span class="text-lg font-bold text-[var(--color-foreground)]">
+										{nextExerciseInCircuit.setIndex + 1} of {nextExerciseInCircuit.exerciseData.sets.length}
+									</span>
+								</div>
+								<div class="flex items-center justify-between">
+									<span class="text-sm font-semibold text-[var(--color-muted)]">Reps</span>
+									<span class="text-lg font-bold text-[var(--color-foreground)]">
+										{nextExerciseInCircuit.set.reps}
+									</span>
+								</div>
+								<div class="flex items-center justify-between">
+									<span class="text-sm font-semibold text-[var(--color-muted)]">Weight</span>
+									<span class="text-lg font-bold text-[var(--color-foreground)]">
+										{nextExerciseInCircuit.set.weight || 0} kg
+									</span>
+								</div>
+								{#if nextExerciseInCircuit.set.notes}
+									<div class="pt-2 border-t border-[var(--color-border)]">
+										<p class="text-xs text-[var(--color-muted)] italic">
+											{nextExerciseInCircuit.set.notes}
+										</p>
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
 		{:else if showRestTimer && currentSet}
 			<!-- Rest Timer Between Sets -->
 			<RestTimer
@@ -570,7 +847,7 @@
 			/>
 		{/if}
 
-		{#if currentExercise}
+		{#if currentExercise && !(showRestTimer && isRestBetweenExercises)}
 			<!-- Current Exercise Card -->
 			<div class="fitness-card">
 				<div class="flex items-start justify-between mb-4">
@@ -604,9 +881,14 @@
 				{#if currentSet && (currentExerciseData?.exerciseType === 'weights' || currentExerciseData?.exerciseType === 'bodyweight')}
 					<div class="space-y-4">
 						<div class="text-center py-4">
-							<div class="text-sm text-[var(--color-muted)] mb-1">Set {currentSetIndex + 1} of {currentExerciseData.sets.length}</div>
+							<div class="text-sm text-[var(--color-muted)] mb-1">
+								Round {currentSetIndex + 1} • Set {currentSetIndex + 1} of {currentExerciseData.sets.length}
+							</div>
 							<div class="text-3xl font-bold text-[var(--color-primary)]">
-								{currentSetIndex + 1}/{currentExerciseData.sets.length}
+								Round {currentSetIndex + 1}
+							</div>
+							<div class="text-sm text-[var(--color-muted)] mt-1">
+								Exercise {currentExerciseIndex + 1} of {selectedExercises.length}
 							</div>
 						</div>
 
