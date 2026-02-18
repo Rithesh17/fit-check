@@ -6,11 +6,13 @@
 		LinearScale,
 		PointElement,
 		LineElement,
+		LineController,
 		Title,
 		Tooltip,
 		Legend,
 		Filler
 	} from 'chart.js';
+	import { convertWeight, getWeightUnitLabel, type WeightUnit } from '$lib/utils/weight-conversion';
 
 	interface WeightData {
 		date: string;
@@ -18,29 +20,40 @@
 		body_fat_percentage: number | null;
 	}
 
-	let { data }: { data: WeightData[] } = $props();
+	let { data, unit = 'kg' }: { data: WeightData[]; unit?: WeightUnit } = $props();
 
 	let chartCanvas: HTMLCanvasElement;
 	let chartInstance: Chart | null = null;
+	let isChartInitialized = $state(false);
 
-	onMount(() => {
+	// Register Chart.js components once at module level
+	Chart.register(
+		CategoryScale,
+		LinearScale,
+		PointElement,
+		LineElement,
+		LineController,
+		Title,
+		Tooltip,
+		Legend,
+		Filler
+	);
+
+	function createChart() {
 		if (!chartCanvas || !data.length) return;
 
-		// Register Chart.js components
-		Chart.register(
-			CategoryScale,
-			LinearScale,
-			PointElement,
-			LineElement,
-			Title,
-			Tooltip,
-			Legend,
-			Filler
-		);
+		// Destroy existing chart if it exists
+		if (chartInstance) {
+			chartInstance.destroy();
+			chartInstance = null;
+		}
 
 		const weightData = data
 			.filter((d) => d.weight_kg !== null)
-			.map((d) => ({ date: d.date, weight: d.weight_kg! }))
+			.map((d) => ({ 
+				date: d.date, 
+				weight: convertWeight(d.weight_kg!, unit) 
+			}))
 			.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
 		const labels = weightData.map((d) => {
@@ -49,6 +62,7 @@
 		});
 
 		const weights = weightData.map((d) => d.weight);
+		const unitLabel = getWeightUnitLabel(unit);
 
 		chartInstance = new Chart(chartCanvas, {
 			type: 'line',
@@ -56,17 +70,17 @@
 				labels,
 				datasets: [
 					{
-						label: 'Weight (kg)',
+						label: `Weight (${unitLabel})`,
 						data: weights,
-						borderColor: 'var(--color-primary)',
-						backgroundColor: 'var(--color-primary)40',
-						fill: true,
+						borderColor: '#FF6B35',
+						borderWidth: 4,
+						fill: false,
 						tension: 0.4,
-						pointRadius: 4,
-						pointHoverRadius: 6,
-						pointBackgroundColor: 'var(--color-primary)',
-						pointBorderColor: '#000',
-						pointBorderWidth: 2
+						pointRadius: 6,
+						pointHoverRadius: 8,
+						pointBackgroundColor: '#FF6B35',
+						pointBorderColor: '#FFFFFF',
+						pointBorderWidth: 3
 					}
 				]
 			},
@@ -89,32 +103,80 @@
 				},
 				scales: {
 					x: {
+						border: {
+							color: '#FF6B35',
+							width: 2
+						},
 						grid: {
-							color: 'var(--color-border)',
-							drawBorder: false
+							color: 'rgba(255, 107, 53, 0.1)'
 						},
 						ticks: {
-							color: 'var(--color-muted)',
+							color: '#FFFFFF',
 							font: {
-								size: 11
-							}
+								size: 13,
+								weight: 'bold'
+							},
+							padding: 8
 						}
 					},
 					y: {
+						border: {
+							color: '#FF6B35',
+							width: 2
+						},
 						grid: {
-							color: 'var(--color-border)',
-							drawBorder: false
+							color: 'rgba(255, 107, 53, 0.1)'
 						},
 						ticks: {
-							color: 'var(--color-muted)',
+							color: '#FFFFFF',
 							font: {
-								size: 11
-							}
+								size: 13,
+								weight: 'bold'
+							},
+							padding: 8
 						}
 					}
 				}
 			}
 		});
+		
+		isChartInitialized = true;
+	}
+
+	function updateChart() {
+		if (!chartInstance || !isChartInitialized) return;
+
+		const weightData = data
+			.filter((d) => d.weight_kg !== null)
+			.map((d) => ({ 
+				date: d.date, 
+				weight: convertWeight(d.weight_kg!, unit) 
+			}))
+			.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+		const labels = weightData.map((d) => {
+			const date = new Date(d.date);
+			return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+		});
+
+		const weights = weightData.map((d) => d.weight);
+		const unitLabel = getWeightUnitLabel(unit);
+
+		chartInstance.data.labels = labels;
+		chartInstance.data.datasets[0].data = weights;
+		chartInstance.data.datasets[0].label = `Weight (${unitLabel})`;
+		chartInstance.update();
+	}
+
+	onMount(() => {
+		createChart();
+	});
+
+	// Update chart when unit or data changes
+	$effect(() => {
+		if (isChartInitialized && chartInstance) {
+			updateChart();
+		}
 	});
 
 	onDestroy(() => {

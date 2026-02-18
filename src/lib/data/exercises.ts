@@ -481,6 +481,7 @@ export const exercises: Exercise[] = [
 		defaultSets: 3,
 		defaultReps: 8,
 		defaultRestSeconds: 90,
+		videoUrl: 'https://youtu.be/MJao9o7ROs0?si=9yMf7NaLhybDG1sr',
 		instructions: 'Hold dumbbells at shoulders, squat with upright torso'
 	},
 	{
@@ -529,6 +530,7 @@ export const exercises: Exercise[] = [
 		defaultSets: 3,
 		defaultReps: 10,
 		defaultRestSeconds: 90,
+		videoUrl: 'https://youtu.be/vgn7bSXkgkA?si=0JyHzbw1ObXhyiwz',
 		instructions: 'Rear foot elevated, deep lunge position'
 	},
 	{
@@ -541,6 +543,7 @@ export const exercises: Exercise[] = [
 		defaultSets: 3,
 		defaultReps: 12,
 		defaultRestSeconds: 90,
+		videoUrl: 'https://youtu.be/Pbmj6xPo-Hw?si=FX4d__P-vpjuqnsG',
 		instructions: 'Step forward, back knee nearly touches ground'
 	},
 
@@ -567,6 +570,7 @@ export const exercises: Exercise[] = [
 		defaultSets: 4,
 		defaultReps: 8,
 		defaultRestSeconds: 120,
+		videoUrl: 'https://youtu.be/5WxMW-Fu5KU?si=p-sOkhdM9REAzliq',
 		instructions: 'Hinge at hips with dumbbells, stretch hamstrings'
 	},
 	{
@@ -655,6 +659,7 @@ export const exercises: Exercise[] = [
 		defaultSets: 4,
 		defaultReps: 15,
 		defaultRestSeconds: 45,
+		videoUrl: 'https://youtu.be/k8ipHzKeAkQ?si=e9DPyrmZomPUEFQB',
 		instructions: 'Full range of motion, stretch and contract'
 	},
 	{

@@ -6,39 +6,52 @@
 		LinearScale,
 		PointElement,
 		LineElement,
+		LineController,
 		Title,
 		Tooltip,
 		Legend,
 		Filler
 	} from 'chart.js';
 	import type { ExerciseProgress } from '$lib/utils/progress';
+	import { convertWeight, getWeightUnitLabel, type WeightUnit } from '$lib/utils/weight-conversion';
 
-	let { progress, type = 'weight' }: { progress: ExerciseProgress; type?: 'weight' | 'volume' } = $props();
+	let { progress, type = 'weight', unit = 'kg' }: { progress: ExerciseProgress; type?: 'weight' | 'volume'; unit?: WeightUnit } = $props();
 
 	let chartCanvas: HTMLCanvasElement;
 	let chartInstance: Chart | null = null;
+	let isChartInitialized = $state(false);
 
-	onMount(() => {
+	// Register Chart.js components once at module level
+	Chart.register(
+		CategoryScale,
+		LinearScale,
+		PointElement,
+		LineElement,
+		LineController,
+		Title,
+		Tooltip,
+		Legend,
+		Filler
+	);
+
+	function createChart() {
 		if (!chartCanvas || !progress.dates.length) return;
 
-		// Register Chart.js components
-		Chart.register(
-			CategoryScale,
-			LinearScale,
-			PointElement,
-			LineElement,
-			Title,
-			Tooltip,
-			Legend,
-			Filler
-		);
+		// Destroy existing chart if it exists
+		if (chartInstance) {
+			chartInstance.destroy();
+			chartInstance = null;
+		}
 
 		const labels = progress.dates.map((date) => {
 			return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 		});
 
-		const data = type === 'weight' ? progress.weights : progress.volumes;
-		const label = type === 'weight' ? 'Max Weight (kg)' : 'Volume (kg)';
+		const data = type === 'weight' 
+			? progress.weights.map(w => convertWeight(w, unit))
+			: progress.volumes.map(v => convertWeight(v, unit));
+		const unitLabel = getWeightUnitLabel(unit);
+		const label = type === 'weight' ? `Max Weight (${unitLabel})` : `Volume (${unitLabel})`;
 		const color = type === 'weight' ? 'var(--color-primary)' : 'var(--color-secondary)';
 
 		chartInstance = new Chart(chartCanvas, {
@@ -107,6 +120,38 @@
 				}
 			}
 		});
+		
+		isChartInitialized = true;
+	}
+
+	function updateChart() {
+		if (!chartInstance || !isChartInitialized) return;
+
+		const labels = progress.dates.map((date) => {
+			return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+		});
+
+		const data = type === 'weight' 
+			? progress.weights.map(w => convertWeight(w, unit))
+			: progress.volumes.map(v => convertWeight(v, unit));
+		const unitLabel = getWeightUnitLabel(unit);
+		const label = type === 'weight' ? `Max Weight (${unitLabel})` : `Volume (${unitLabel})`;
+
+		chartInstance.data.labels = labels;
+		chartInstance.data.datasets[0].data = data;
+		chartInstance.data.datasets[0].label = label;
+		chartInstance.update();
+	}
+
+	onMount(() => {
+		createChart();
+	});
+
+	// Update chart when unit or type changes
+	$effect(() => {
+		if (isChartInitialized && chartInstance) {
+			updateChart();
+		}
 	});
 
 	onDestroy(() => {

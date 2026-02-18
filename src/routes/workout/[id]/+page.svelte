@@ -4,6 +4,8 @@
 	import { supabase } from '$lib/supabase/client';
 	import { getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
 	import { Calendar, Clock, Activity, ArrowLeft, Check } from 'lucide-svelte';
+	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
+	import { convertWeight, formatWeight, getWeightUnitLabel } from '$lib/utils/weight-conversion';
 
 	type WorkoutExerciseSets = 
 		| Array<{ reps: number; weight: number; rest: number; completed: boolean }>
@@ -35,6 +37,16 @@
 	
 	// Custom exercises from database
 	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
+	
+	let currentUnit = $state<WeightUnit>('kg');
+	
+	// Subscribe to unit preference
+	$effect(() => {
+		const unsubscribe = unitPreference.subscribe((unit) => {
+			currentUnit = unit;
+		});
+		return unsubscribe;
+	});
 
 	$effect(() => {
 		if (params.id) {
@@ -127,7 +139,7 @@
 	}
 
 	function getTotalVolume(): number {
-		return workoutExercises.reduce((total, we) => {
+		const volumeKg = workoutExercises.reduce((total, we) => {
 			if (Array.isArray(we.sets)) {
 				return total + we.sets.reduce((setTotal, set) => {
 					return setTotal + (set.reps * set.weight);
@@ -135,6 +147,8 @@
 			}
 			return total;
 		}, 0);
+		// Convert for display
+		return convertWeight(volumeKg, currentUnit);
 	}
 
 	function getCompletedSets(): number {
@@ -216,7 +230,7 @@
 				</div>
 				<div class="fitness-card text-center">
 					<p class="text-2xl font-bold text-[var(--color-foreground)]">{getTotalVolume().toFixed(0)}</p>
-					<p class="text-xs text-[var(--color-muted)] mt-1">Volume (kg)</p>
+					<p class="text-xs text-[var(--color-muted)] mt-1">Volume ({getWeightUnitLabel(currentUnit)})</p>
 				</div>
 			</div>
 
@@ -268,8 +282,10 @@
 										<div class="flex-1 flex items-center gap-2">
 											<span class="text-[var(--color-foreground)] font-medium">{set.reps}</span>
 											<span class="text-[var(--color-muted)]">×</span>
-											<span class="text-[var(--color-foreground)] font-medium">{set.weight}</span>
-											<span class="text-[var(--color-muted)] text-sm">kg</span>
+											<span class="text-[var(--color-foreground)] font-medium">
+												{convertWeight(set.weight, currentUnit).toFixed(1)}
+											</span>
+											<span class="text-[var(--color-muted)] text-sm">{getWeightUnitLabel(currentUnit)}</span>
 										</div>
 									</div>
 								{/each}

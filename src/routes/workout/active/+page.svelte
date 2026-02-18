@@ -5,12 +5,23 @@
 	import { exercises, getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
 	import RestTimer from '$lib/components/RestTimer.svelte';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
-	import { Check, X, Play, Pause, SkipForward, Info, Clock, Edit2 } from 'lucide-svelte';
+	import { Check, X, Play, Pause, SkipForward, Info, Clock, Edit2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp } from 'lucide-svelte';
+	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
+	import { convertWeight, formatWeight, getWeightUnitLabel, lbsToKg, kgToLbs } from '$lib/utils/weight-conversion';
 
 	type WorkoutExercise = 
-		| { exercise: Exercise; exerciseType: 'weights' | 'bodyweight'; sets: Array<{ reps: number; weight: number; rest: number; completed: boolean; notes?: string }> }
+		| { exercise: Exercise; exerciseType: 'weights' | 'bodyweight'; sets: Array<{ reps: number; weight: number; rest: number; completed: boolean; notes?: string; durationSeconds?: number }> }
 		| { exercise: Exercise; exerciseType: 'cardio'; durationMinutes: number; calories: number; completed: boolean }
 		| { exercise: Exercise; exerciseType: 'stretches'; durationSeconds: number; reps: number; completed: boolean };
+
+	// Exercises that use time instead of reps/weight
+	const TIME_BASED_EXERCISES = ['plank', 'farmer-walk', 'dead-bug', 'wall-sit', 'hollow-hold', 'ab-wheel'];
+
+	function isTimeBasedExercise(exercise: Exercise | null): boolean {
+		if (!exercise) return false;
+		return TIME_BASED_EXERCISES.includes(exercise.id) || 
+		       (exercise.defaultReps === 1 && exercise.instructions.toLowerCase().includes('hold'));
+	}
 
 	let workoutName = $state('');
 	let selectedExercises = $state<WorkoutExercise[]>([]);
@@ -33,9 +44,23 @@
 	let cardioTimerSeconds = $state(0);
 	let cardioTimerInterval: ReturnType<typeof setInterval> | null = $state(null);
 	let cardioTimerRunning = $state(false);
+	let showRoundOverview = $state(false);
+	let setTimerSeconds = $state(0);
+	let setTimerInterval: ReturnType<typeof setInterval> | null = $state(null);
+	let setTimerRunning = $state(false);
+	
+	let currentUnit = $state<WeightUnit>('kg');
 	
 	// Custom exercises from database
 	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
+	
+	// Subscribe to unit preference
+	$effect(() => {
+		const unsubscribe = unitPreference.subscribe((unit) => {
+			currentUnit = unit;
+		});
+		return unsubscribe;
+	});
 
 	const currentExercise = $derived(
 		selectedExercises[currentExerciseIndex]?.exercise || null
@@ -48,6 +73,7 @@
 			? currentExerciseData.sets[currentSetIndex] || null
 			: null
 	);
+	const isCurrentExerciseTimeBased = $derived(isTimeBasedExercise(currentExercise));
 	const allSetsComplete = $derived(
 		selectedExercises.every((ex) => {
 			if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
@@ -58,6 +84,66 @@
 			return false;
 		})
 	);
+
+	// Circuit round calculations
+	const currentRound = $derived.by(() => {
+		if (currentExerciseData?.exerciseType === 'weights' || currentExerciseData?.exerciseType === 'bodyweight') {
+			return currentSetIndex + 1;
+		}
+		// For cardio/stretches, they're typically in round 1
+		return 1;
+	});
+
+	const maxRounds = $derived.by(() => {
+		return Math.max(...selectedExercises
+			.filter(ex => ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight')
+			.map(ex => ex.sets.length), 0);
+	});
+
+	// Get exercises in current round with their status
+	const exercisesInCurrentRound = $derived.by(() => {
+		if (currentExerciseData?.exerciseType === 'weights' || currentExerciseData?.exerciseType === 'bodyweight') {
+			const roundSetIndex = currentSetIndex;
+			return selectedExercises.map((ex, exIdx) => {
+				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+					if (roundSetIndex < ex.sets.length) {
+						const set = ex.sets[roundSetIndex];
+						return {
+							exercise: ex.exercise,
+							exerciseData: ex,
+							exerciseIndex: exIdx,
+							setIndex: roundSetIndex,
+							set: set,
+							completed: set.completed,
+							isCurrent: exIdx === currentExerciseIndex && roundSetIndex === currentSetIndex
+						};
+					}
+				}
+				return null;
+			}).filter((item): item is NonNullable<typeof item> => item !== null);
+		}
+		return [];
+	});
+
+	const roundProgress = $derived.by(() => {
+		if (currentExerciseData?.exerciseType === 'weights' || currentExerciseData?.exerciseType === 'bodyweight') {
+			// Find position in current round
+			const roundSetIndex = currentSetIndex;
+			let position = 0;
+			for (let i = 0; i <= currentExerciseIndex; i++) {
+				const ex = selectedExercises[i];
+				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+					if (roundSetIndex < ex.sets.length) {
+						position++;
+					}
+				}
+			}
+			return position;
+		}
+		return currentExerciseIndex + 1;
+	});
+
+	const exercisesInRound = $derived(exercisesInCurrentRound.length);
 
 	// Get next exercise in circuit order
 	const nextExerciseInCircuit = $derived.by(() => {
@@ -174,9 +260,12 @@
 						return stretchesEx;
 					} else {
 						// Weights or bodyweight
+						const isTimeBased = isTimeBasedExercise(exercise);
 						const sets = (ex.sets || []).map((set: any) => ({
 							...set,
-							notes: set.notes || ''
+							notes: set.notes || '',
+							// Initialize durationSeconds for time-based exercises if not present
+							durationSeconds: isTimeBased ? (set.durationSeconds || 0) : undefined
 						}));
 						const weightsEx: WorkoutExercise = {
 							exercise,
@@ -226,6 +315,25 @@
 		}
 	});
 
+	// Start/stop set timer for time-based exercises
+	$effect(() => {
+		// Reset timer when set changes
+		if (isCurrentExerciseTimeBased && currentSet) {
+			// Update timer display from set duration
+			if (currentSet.durationSeconds !== undefined) {
+				setTimerSeconds = currentSet.durationSeconds;
+			} else {
+				setTimerSeconds = 0;
+			}
+			// Auto-start timer if not running
+			if (!setTimerRunning) {
+				// Don't auto-start, let user start manually
+			}
+		} else if (!isCurrentExerciseTimeBased && setTimerRunning) {
+			stopSetTimer();
+		}
+	});
+
 	// Cleanup intervals on unmount
 	$effect(() => {
 		return () => {
@@ -236,6 +344,10 @@
 			if (cardioTimerInterval) {
 				clearInterval(cardioTimerInterval);
 				cardioTimerInterval = null;
+			}
+			if (setTimerInterval) {
+				clearInterval(setTimerInterval);
+				setTimerInterval = null;
 			}
 		};
 	});
@@ -322,6 +434,35 @@
 			cardioTimerInterval = null;
 		}
 		cardioTimerRunning = false;
+	}
+
+	function startSetTimer() {
+		if (setTimerInterval) {
+			clearInterval(setTimerInterval);
+			setTimerInterval = null;
+		}
+		// Initialize timer from set duration if available, otherwise start at 0
+		if (currentSet && currentSet.durationSeconds !== undefined && currentSet.durationSeconds > 0) {
+			setTimerSeconds = currentSet.durationSeconds;
+		} else {
+			setTimerSeconds = 0;
+		}
+		setTimerRunning = true;
+		setTimerInterval = setInterval(() => {
+			setTimerSeconds = setTimerSeconds + 1;
+			// Auto-save duration every second
+			if (currentSet) {
+				updateSetValue('durationSeconds', setTimerSeconds);
+			}
+		}, 1000);
+	}
+
+	function stopSetTimer() {
+		if (setTimerInterval) {
+			clearInterval(setTimerInterval);
+			setTimerInterval = null;
+		}
+		setTimerRunning = false;
 	}
 
 	function completeSet() {
@@ -521,7 +662,7 @@
 		}
 	}
 
-	function updateSetValue(field: 'reps' | 'weight' | 'notes' | 'completed', value: number | string | boolean) {
+	function updateSetValue(field: 'reps' | 'weight' | 'notes' | 'completed' | 'durationSeconds', value: number | string | boolean) {
 		selectedExercises = selectedExercises.map((ex, exIdx) => {
 			if (exIdx === currentExerciseIndex && (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight')) {
 				return {
@@ -664,6 +805,108 @@
 		handleRestComplete();
 	}
 
+	function moveToNextInRound() {
+		showRestTimer = false;
+		isRestBetweenExercises = false;
+		
+		if (currentExerciseData?.exerciseType !== 'weights' && currentExerciseData?.exerciseType !== 'bodyweight') {
+			return;
+		}
+		
+		// Find next exercise in same round (same set index) that's not completed
+		for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') && 
+				currentSetIndex < ex.sets.length) {
+				const set = ex.sets[currentSetIndex];
+				if (!set.completed) {
+					currentExerciseIndex = exIdx;
+					// Keep same set index (same round)
+					return;
+				}
+			}
+		}
+		
+		// No next exercise in round, move to next round
+		moveToNextRound();
+	}
+
+	function moveToNextRound() {
+		showRestTimer = false;
+		isRestBetweenExercises = false;
+		
+		if (currentExerciseData?.exerciseType !== 'weights' && currentExerciseData?.exerciseType !== 'bodyweight') {
+			return;
+		}
+		
+		// Move to first exercise of next round
+		const nextSetIndex = currentSetIndex + 1;
+		for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+				if (nextSetIndex < ex.sets.length) {
+					const set = ex.sets[nextSetIndex];
+					if (!set.completed) {
+						currentExerciseIndex = exIdx;
+						currentSetIndex = nextSetIndex;
+						return;
+					}
+				}
+			}
+		}
+		
+		// No more rounds, finish workout
+		finishWorkout(true);
+	}
+
+	function moveToPreviousInCircuit() {
+		showRestTimer = false;
+		isRestBetweenExercises = false;
+		
+		if (currentExerciseData?.exerciseType !== 'weights' && currentExerciseData?.exerciseType !== 'bodyweight') {
+			// For cardio/stretches, just go to previous exercise
+			if (currentExerciseIndex > 0) {
+				currentExerciseIndex = currentExerciseIndex - 1;
+				currentSetIndex = 0;
+			}
+			return;
+		}
+		
+		// Find previous exercise in same round
+		for (let exIdx = currentExerciseIndex - 1; exIdx >= 0; exIdx--) {
+			const ex = selectedExercises[exIdx];
+			if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') && 
+				currentSetIndex < ex.sets.length) {
+				currentExerciseIndex = exIdx;
+				// Keep same set index (same round)
+				return;
+			}
+		}
+		
+		// No previous exercise in this round, go to previous round
+		if (currentSetIndex > 0) {
+			const prevSetIndex = currentSetIndex - 1;
+			// Find last exercise in previous round
+			for (let exIdx = selectedExercises.length - 1; exIdx >= 0; exIdx--) {
+				const ex = selectedExercises[exIdx];
+				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+					if (prevSetIndex < ex.sets.length) {
+						currentExerciseIndex = exIdx;
+						currentSetIndex = prevSetIndex;
+						return;
+					}
+				}
+			}
+		}
+	}
+
+	function jumpToExerciseInRound(exerciseIndex: number, setIndex: number) {
+		showRestTimer = false;
+		isRestBetweenExercises = false;
+		currentExerciseIndex = exerciseIndex;
+		currentSetIndex = setIndex;
+	}
+
 	function handleRestComplete() {
 		showRestTimer = false;
 		const wasRestBetweenExercises = isRestBetweenExercises;
@@ -749,6 +992,26 @@
 					{isSaving ? 'Saving...' : 'Finish'}
 				</button>
 			</div>
+			{#if currentExerciseData?.exerciseType === 'weights' || currentExerciseData?.exerciseType === 'bodyweight'}
+				<!-- Round Information -->
+				<div class="mb-2">
+					<div class="flex items-center gap-3 mb-2">
+						<div class="px-3 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded-full font-bold text-sm">
+							Round {currentRound} of {maxRounds}
+						</div>
+						<div class="text-sm text-[var(--color-muted)]">
+							Exercise {roundProgress} of {exercisesInRound} in this round
+						</div>
+					</div>
+					<!-- Round Progress Bar -->
+					<div class="w-full h-2 bg-[var(--color-card-hover)] rounded-full overflow-hidden">
+						<div 
+							class="h-full bg-[var(--gradient-primary)] transition-all duration-300"
+							style="width: {(exercisesInRound > 0 ? (roundProgress / exercisesInRound) * 100 : 0)}%"
+						></div>
+					</div>
+				</div>
+			{/if}
 			<div class="flex items-center gap-2 text-sm text-[var(--color-muted)]">
 				<Clock class="w-4 h-4" />
 				<span>{formatDuration(workoutDuration)}</span>
@@ -761,6 +1024,13 @@
 	<div class="max-w-md mx-auto px-4 py-6 space-y-6">
 		{#if showRestTimer && isRestBetweenExercises}
 			<!-- Rest Timer Between Exercises -->
+			<div class="fitness-card border-2 border-[var(--color-primary)]/50 bg-[var(--color-primary)]/5 mb-4">
+				<div class="text-center mb-3">
+					<div class="text-sm text-[var(--color-muted)] mb-1">
+						Resting before next exercise in Round {currentRound}
+					</div>
+				</div>
+			</div>
 			<RestTimer
 				duration={restDurationBetweenExercises}
 				onComplete={handleRestComplete}
@@ -774,7 +1044,7 @@
 			{#if nextExerciseInCircuit}
 				<div class="fitness-card border-2 border-[var(--color-primary)]/50 bg-[var(--color-primary)]/5">
 					<h3 class="text-sm font-semibold text-[var(--color-muted)] mb-3 uppercase tracking-wide">
-						Up Next
+						Up Next in Round {nextExerciseInCircuit.setIndex + 1}
 					</h3>
 					<div class="space-y-3">
 						<!-- Exercise Name -->
@@ -811,18 +1081,27 @@
 										{nextExerciseInCircuit.setIndex + 1} of {nextExerciseInCircuit.exerciseData.sets.length}
 									</span>
 								</div>
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-semibold text-[var(--color-muted)]">Reps</span>
-									<span class="text-lg font-bold text-[var(--color-foreground)]">
-										{nextExerciseInCircuit.set.reps}
-									</span>
-								</div>
-								<div class="flex items-center justify-between">
-									<span class="text-sm font-semibold text-[var(--color-muted)]">Weight</span>
-									<span class="text-lg font-bold text-[var(--color-foreground)]">
-										{nextExerciseInCircuit.set.weight || 0} kg
-									</span>
-								</div>
+								{#if isTimeBasedExercise(nextExerciseInCircuit.exercise)}
+									<div class="flex items-center justify-between">
+										<span class="text-sm font-semibold text-[var(--color-muted)]">Duration</span>
+										<span class="text-lg font-bold text-[var(--color-foreground)]">
+											{formatTime(nextExerciseInCircuit.set.durationSeconds || 0)}
+										</span>
+									</div>
+								{:else}
+									<div class="flex items-center justify-between">
+										<span class="text-sm font-semibold text-[var(--color-muted)]">Reps</span>
+										<span class="text-lg font-bold text-[var(--color-foreground)]">
+											{nextExerciseInCircuit.set.reps}
+										</span>
+									</div>
+									<div class="flex items-center justify-between">
+										<span class="text-sm font-semibold text-[var(--color-muted)]">Weight</span>
+										<span class="text-lg font-bold text-[var(--color-foreground)]">
+											{formatWeight(nextExerciseInCircuit.set.weight || 0, currentUnit)}
+										</span>
+									</div>
+								{/if}
 								{#if nextExerciseInCircuit.set.notes}
 									<div class="pt-2 border-t border-[var(--color-border)]">
 										<p class="text-xs text-[var(--color-muted)] italic">
@@ -880,86 +1159,267 @@
 				<!-- Current Set - Weights/Bodyweight -->
 				{#if currentSet && (currentExerciseData?.exerciseType === 'weights' || currentExerciseData?.exerciseType === 'bodyweight')}
 					<div class="space-y-4">
+						<!-- Round Overview Toggle -->
+						<button
+							onclick={() => (showRoundOverview = !showRoundOverview)}
+							class="w-full flex items-center justify-between p-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)] transition-colors"
+						>
+							<div class="flex items-center gap-2">
+								<span class="text-sm font-semibold text-[var(--color-foreground)]">
+									Round {currentRound} Overview
+								</span>
+								<span class="text-xs text-[var(--color-muted)]">
+									({exercisesInCurrentRound.filter(e => e.completed).length}/{exercisesInCurrentRound.length} completed)
+								</span>
+							</div>
+							{#if showRoundOverview}
+								<ChevronUp class="w-4 h-4 text-[var(--color-muted)]" />
+							{:else}
+								<ChevronDown class="w-4 h-4 text-[var(--color-muted)]" />
+							{/if}
+						</button>
+
+						<!-- Round Overview -->
+						{#if showRoundOverview}
+							<div class="p-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg space-y-2">
+								{#each exercisesInCurrentRound as item}
+									<button
+										onclick={() => jumpToExerciseInRound(item.exerciseIndex, item.setIndex)}
+										class="w-full flex items-center justify-between p-2 rounded hover:bg-[var(--color-background)] transition-colors {item.isCurrent ? 'bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50' : ''}"
+									>
+										<div class="flex items-center gap-2 flex-1 text-left">
+											{#if item.completed}
+												<Check class="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" />
+											{:else if item.isCurrent}
+												<ChevronRight class="w-4 h-4 text-[var(--color-primary)] flex-shrink-0" />
+											{:else}
+												<div class="w-4 h-4 rounded-full border-2 border-[var(--color-muted)] flex-shrink-0"></div>
+											{/if}
+											<span class="text-sm font-medium text-[var(--color-foreground)] {item.isCurrent ? 'font-bold' : ''}">
+												{item.exercise.name}
+											</span>
+										</div>
+										<div class="text-xs text-[var(--color-muted)]">
+											{#if isTimeBasedExercise(item.exercise)}
+												{item.set.durationSeconds || 0}s
+											{:else}
+												{item.set.reps} reps {item.set.weight > 0 ? `• ${formatWeight(item.set.weight, currentUnit)}` : ''}
+											{/if}
+										</div>
+									</button>
+								{/each}
+							</div>
+						{/if}
+
 						<div class="text-center py-4">
 							<div class="text-sm text-[var(--color-muted)] mb-1">
-								Round {currentSetIndex + 1} • Set {currentSetIndex + 1} of {currentExerciseData.sets.length}
+								Set {currentSetIndex + 1} of {currentExerciseData.sets.length} for this exercise
 							</div>
 							<div class="text-3xl font-bold text-[var(--color-primary)]">
-								Round {currentSetIndex + 1}
+								Round {currentRound}
 							</div>
 							<div class="text-sm text-[var(--color-muted)] mt-1">
-								Exercise {currentExerciseIndex + 1} of {selectedExercises.length}
+								Exercise {roundProgress} of {exercisesInRound} in this round
 							</div>
 						</div>
 
-						<!-- Reps Input -->
-						<div>
-							<label for="reps-input" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-								Reps
-							</label>
-							<input
-								id="reps-input"
-								type="number"
-								value={currentSet.reps}
-								oninput={(e) => updateSetValue('reps', parseInt((e.target as HTMLInputElement).value) || 0)}
-								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-center text-2xl font-bold focus:outline-none focus:border-[var(--color-primary)]"
-							/>
-						</div>
-
-						<!-- Weight Input -->
-						<div>
-							<label for="weight-input" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-								Weight (kg)
-							</label>
-							<div class="relative">
-								<input
-									id="weight-input"
-									type="number"
-									step="0.5"
-									value={currentSet.weight}
-									oninput={(e) => updateSetValue('weight', parseFloat((e.target as HTMLInputElement).value) || 0)}
-									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-center text-2xl font-bold focus:outline-none focus:border-[var(--color-primary)]"
-								/>
-								<!-- Quick Weight Buttons -->
-								<div class="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1">
+						{#if isCurrentExerciseTimeBased}
+							<!-- Time Input for Time-Based Exercises -->
+							<div>
+								<label for="time-input" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Duration (seconds)
+								</label>
+								<div class="text-center py-4">
+									<div class="text-5xl font-bold text-[var(--color-primary)] mb-2">
+										{formatTime(setTimerSeconds)}
+									</div>
+									<div class="text-sm text-[var(--color-muted)]">
+										{setTimerRunning ? 'Timer Running' : 'Timer Stopped'}
+									</div>
+								</div>
+								<div class="flex gap-2 mb-2">
 									<button
-										onclick={() => updateSetValue('weight', currentSet.weight + 2.5)}
-										class="w-8 h-6 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded hover:bg-[var(--color-primary)]/30 transition-colors"
-										title="+2.5kg"
+										onclick={() => {
+											if (setTimerRunning) {
+												stopSetTimer();
+											} else {
+												startSetTimer();
+											}
+										}}
+										class="flex-1 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors font-semibold flex items-center justify-center gap-2"
 									>
-										+2.5
+										{#if setTimerRunning}
+											<Pause class="w-5 h-5" />
+											Pause Timer
+										{:else}
+											<Play class="w-5 h-5" />
+											Start Timer
+										{/if}
 									</button>
 									<button
-										onclick={() => updateSetValue('weight', Math.max(0, currentSet.weight - 2.5))}
-										class="w-8 h-6 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded hover:bg-[var(--color-primary)]/30 transition-colors"
-										title="-2.5kg"
+										onclick={() => {
+											setTimerSeconds = 0;
+											updateSetValue('durationSeconds', 0);
+										}}
+										class="px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
 									>
-										-2.5
+										Reset
 									</button>
 								</div>
+								<input
+									id="time-input"
+									type="number"
+									value={currentSet.durationSeconds || setTimerSeconds}
+									oninput={(e) => {
+										const seconds = parseInt((e.target as HTMLInputElement).value) || 0;
+										setTimerSeconds = seconds;
+										updateSetValue('durationSeconds', seconds);
+									}}
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-center text-2xl font-bold focus:outline-none focus:border-[var(--color-primary)]"
+									placeholder="Enter seconds"
+								/>
 							</div>
-							<!-- Quick Weight Buttons Row -->
-							<div class="flex gap-2 mt-2">
-								<button
-									onclick={() => updateSetValue('weight', currentSet.weight + 5)}
-									class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
-								>
-									+5kg
-								</button>
-								<button
-									onclick={() => updateSetValue('weight', currentSet.weight + 10)}
-									class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
-								>
-									+10kg
-								</button>
-								<button
-									onclick={() => updateSetValue('weight', Math.max(0, currentSet.weight - 5))}
-									class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
-								>
-									-5kg
-								</button>
+						{:else}
+							<!-- Reps Input -->
+							<div>
+								<label for="reps-input" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Reps
+								</label>
+								<input
+									id="reps-input"
+									type="number"
+									value={currentSet.reps}
+									oninput={(e) => updateSetValue('reps', parseInt((e.target as HTMLInputElement).value) || 0)}
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-center text-2xl font-bold focus:outline-none focus:border-[var(--color-primary)]"
+								/>
 							</div>
-						</div>
+
+							<!-- Weight Input -->
+							<div>
+								<label for="weight-input" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Weight ({getWeightUnitLabel(currentUnit)})
+								</label>
+								<div class="relative">
+									<input
+										id="weight-input"
+										type="number"
+										step={currentUnit === 'lbs' ? '0.5' : '0.5'}
+										value={convertWeight(currentSet.weight, currentUnit)}
+										oninput={(e) => {
+											const inputValue = parseFloat((e.target as HTMLInputElement).value) || 0;
+											// Convert from displayed unit back to kg for storage
+											const weightKg = currentUnit === 'lbs' ? lbsToKg(inputValue) : inputValue;
+											updateSetValue('weight', weightKg);
+										}}
+										class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-center text-2xl font-bold focus:outline-none focus:border-[var(--color-primary)]"
+									/>
+									<!-- Quick Weight Buttons -->
+									<div class="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-1">
+										{#if currentUnit === 'lbs'}
+											{@const quickIncrement = kgToLbs(2.5)}
+											<button
+												onclick={() => {
+													const currentDisplayWeight = convertWeight(currentSet.weight, currentUnit);
+													const newDisplayWeight = currentDisplayWeight + quickIncrement;
+													const weightKg = lbsToKg(newDisplayWeight);
+													updateSetValue('weight', weightKg);
+												}}
+												class="w-8 h-6 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded hover:bg-[var(--color-primary)]/30 transition-colors"
+												title="+{quickIncrement.toFixed(1)}lbs"
+											>
+												+{quickIncrement.toFixed(1)}
+											</button>
+											<button
+												onclick={() => {
+													const currentDisplayWeight = convertWeight(currentSet.weight, currentUnit);
+													const newDisplayWeight = Math.max(0, currentDisplayWeight - quickIncrement);
+													const weightKg = lbsToKg(newDisplayWeight);
+													updateSetValue('weight', weightKg);
+												}}
+												class="w-8 h-6 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded hover:bg-[var(--color-primary)]/30 transition-colors"
+												title="-{quickIncrement.toFixed(1)}lbs"
+											>
+												-{quickIncrement.toFixed(1)}
+											</button>
+										{:else}
+											<button
+												onclick={() => updateSetValue('weight', currentSet.weight + 2.5)}
+												class="w-8 h-6 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded hover:bg-[var(--color-primary)]/30 transition-colors"
+												title="+2.5kg"
+											>
+												+2.5
+											</button>
+											<button
+												onclick={() => updateSetValue('weight', Math.max(0, currentSet.weight - 2.5))}
+												class="w-8 h-6 text-xs bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded hover:bg-[var(--color-primary)]/30 transition-colors"
+												title="-2.5kg"
+											>
+												-2.5
+											</button>
+										{/if}
+									</div>
+								</div>
+								<!-- Quick Weight Buttons Row -->
+								<div class="flex gap-2 mt-2">
+									{#if currentUnit === 'lbs'}
+										{@const increment5 = kgToLbs(5)}
+										{@const increment10 = kgToLbs(10)}
+										<button
+											onclick={() => {
+												const currentDisplayWeight = convertWeight(currentSet.weight, currentUnit);
+												const newDisplayWeight = currentDisplayWeight + increment5;
+												const weightKg = lbsToKg(newDisplayWeight);
+												updateSetValue('weight', weightKg);
+											}}
+											class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+										>
+											+{increment5.toFixed(1)}lbs
+										</button>
+										<button
+											onclick={() => {
+												const currentDisplayWeight = convertWeight(currentSet.weight, currentUnit);
+												const newDisplayWeight = currentDisplayWeight + increment10;
+												const weightKg = lbsToKg(newDisplayWeight);
+												updateSetValue('weight', weightKg);
+											}}
+											class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+										>
+											+{increment10.toFixed(1)}lbs
+										</button>
+										<button
+											onclick={() => {
+												const currentDisplayWeight = convertWeight(currentSet.weight, currentUnit);
+												const newDisplayWeight = Math.max(0, currentDisplayWeight - increment5);
+												const weightKg = lbsToKg(newDisplayWeight);
+												updateSetValue('weight', weightKg);
+											}}
+											class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+										>
+											-{increment5.toFixed(1)}lbs
+										</button>
+									{:else}
+										<button
+											onclick={() => updateSetValue('weight', currentSet.weight + 5)}
+											class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+										>
+											+5kg
+										</button>
+										<button
+											onclick={() => updateSetValue('weight', currentSet.weight + 10)}
+											class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+										>
+											+10kg
+										</button>
+										<button
+											onclick={() => updateSetValue('weight', Math.max(0, currentSet.weight - 5))}
+											class="flex-1 py-2 text-xs bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] hover:border-[var(--color-primary)] transition-colors"
+										>
+											-5kg
+										</button>
+									{/if}
+								</div>
+							</div>
+						{/if}
 
 						<!-- Set Notes -->
 						<div>
@@ -996,28 +1456,36 @@
 							Complete Set
 						</button>
 
-						<!-- Quick Actions -->
+						<!-- Circuit Navigation Buttons -->
 						<div class="flex gap-2">
-							{#if currentSetIndex > 0}
+							<!-- Go Back Button -->
+							{#if (currentExerciseIndex > 0 || (currentExerciseIndex === 0 && currentSetIndex > 0))}
 								<button
-									onclick={() => {
-										currentSetIndex = currentSetIndex - 1;
-										showRestTimer = false;
-									}}
-									class="flex-1 py-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-foreground)] border border-[var(--color-border)] rounded-lg"
+									onclick={moveToPreviousInCircuit}
+									class="flex-1 py-2 text-sm font-semibold text-[var(--color-foreground)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-card-hover)] flex items-center justify-center gap-1"
 								>
-									Previous Set
+									<ChevronLeft class="w-4 h-4" />
+									Go Back
 								</button>
 							{/if}
-							{#if currentSetIndex < currentExerciseData.sets.length - 1}
+							
+							<!-- Next in Round Button -->
+							{#if exercisesInCurrentRound.some(e => !e.completed && e.exerciseIndex > currentExerciseIndex)}
 								<button
-									onclick={() => {
-										currentSetIndex = currentSetIndex + 1;
-										showRestTimer = false;
-									}}
-									class="flex-1 py-2 text-sm text-[var(--color-muted)] hover:text-[var(--color-foreground)] border border-[var(--color-border)] rounded-lg"
+									onclick={moveToNextInRound}
+									class="flex-1 py-2 text-sm font-semibold text-[var(--color-foreground)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-card-hover)] flex items-center justify-center gap-1"
 								>
-									Next Set
+									Next in Round
+									<ChevronRight class="w-4 h-4" />
+								</button>
+							{:else if currentRound < maxRounds}
+								<!-- Skip to Next Round Button -->
+								<button
+									onclick={moveToNextRound}
+									class="flex-1 py-2 text-sm font-semibold text-[var(--color-primary)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50 rounded-lg hover:bg-[var(--color-primary)]/20 flex items-center justify-center gap-1"
+								>
+									Skip to Round {currentRound + 1}
+									<ChevronRight class="w-4 h-4" />
 								</button>
 							{/if}
 						</div>
@@ -1122,33 +1590,6 @@
 				{/if}
 			</div>
 
-			<!-- Exercise Navigation -->
-			<div class="flex gap-2">
-				{#if currentExerciseIndex > 0}
-					<button
-						onclick={() => {
-							currentExerciseIndex = currentExerciseIndex - 1;
-							currentSetIndex = 0;
-							showRestTimer = false;
-						}}
-						class="flex-1 py-3 text-sm font-semibold text-[var(--color-foreground)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-card-hover)]"
-					>
-						← Previous Exercise
-					</button>
-				{/if}
-				{#if currentExerciseIndex < selectedExercises.length - 1}
-					<button
-						onclick={() => {
-							currentExerciseIndex = currentExerciseIndex + 1;
-							currentSetIndex = 0;
-							showRestTimer = false;
-						}}
-						class="flex-1 py-3 text-sm font-semibold text-[var(--color-foreground)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-card-hover)]"
-					>
-						Next Exercise →
-					</button>
-				{/if}
-			</div>
 		{/if}
 
 		{#if allSetsComplete}

@@ -6,6 +6,7 @@
 		LinearScale,
 		PointElement,
 		LineElement,
+		LineController,
 		Title,
 		Tooltip,
 		Legend,
@@ -13,11 +14,35 @@
 	} from 'chart.js';
 	import { calculateWorkoutVolumes, type WorkoutVolume } from '$lib/utils/progress';
 	import { supabase } from '$lib/supabase/client';
+	import { convertWeight, getWeightUnitLabel, type WeightUnit } from '$lib/utils/weight-conversion';
+	import { unitPreference } from '$lib/stores/unit-preference';
 
 	let volumes = $state<WorkoutVolume[]>([]);
 	let isLoading = $state(true);
 	let chartCanvas: HTMLCanvasElement;
 	let chartInstance: Chart | null = null;
+	let currentUnit = $state<WeightUnit>('kg');
+	
+	// Register Chart.js components once at module level
+	Chart.register(
+		CategoryScale,
+		LinearScale,
+		PointElement,
+		LineElement,
+		LineController,
+		Title,
+		Tooltip,
+		Legend,
+		Filler
+	);
+	
+	// Subscribe to unit preference
+	$effect(() => {
+		const unsubscribe = unitPreference.subscribe((unit) => {
+			currentUnit = unit;
+		});
+		return unsubscribe;
+	});
 
 	$effect(() => {
 		loadVolumeData();
@@ -33,6 +58,13 @@
 				chartInstance = null;
 			}
 		};
+	});
+	
+	// Recreate chart when unit changes
+	$effect(() => {
+		if (chartCanvas && volumes.length > 0 && !isLoading) {
+			createChart();
+		}
 	});
 
 	async function loadVolumeData() {
@@ -72,20 +104,9 @@
 			chartInstance.destroy();
 		}
 
-		// Register Chart.js components
-		Chart.register(
-			CategoryScale,
-			LinearScale,
-			PointElement,
-			LineElement,
-			Title,
-			Tooltip,
-			Legend,
-			Filler
-		);
-
 		const labels = volumes.map((v) => v.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-		const data = volumes.map((v) => v.totalVolume);
+		const data = volumes.map((v) => convertWeight(v.totalVolume, currentUnit));
+		const unitLabel = getWeightUnitLabel(currentUnit);
 
 		chartInstance = new Chart(chartCanvas, {
 			type: 'line',
@@ -93,7 +114,7 @@
 				labels,
 				datasets: [
 					{
-						label: 'Total Volume (kg)',
+						label: `Total Volume (${unitLabel})`,
 						data,
 						borderColor: 'var(--color-primary)',
 						backgroundColor: 'rgba(255, 107, 53, 0.1)',

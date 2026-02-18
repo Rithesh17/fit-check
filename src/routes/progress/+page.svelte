@@ -7,6 +7,8 @@
 	import VolumeTrendChart from '$lib/components/VolumeTrendChart.svelte';
 	import MuscleGroupChart from '$lib/components/MuscleGroupChart.svelte';
 	import { TrendingUp, Award, Activity } from 'lucide-svelte';
+	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
+	import { convertWeight, formatWeight, getWeightUnitLabel } from '$lib/utils/weight-conversion';
 
 	let selectedExerciseId = $state<string | null>(null);
 	let exerciseProgress = $state<ExerciseProgress | null>(null);
@@ -20,6 +22,16 @@
 	
 	// Custom exercises from database
 	let customExercises = $state<Array<{ id: string; name: string; exerciseType: ExerciseType; isCustom: boolean }>>([]);
+	
+	let currentUnit = $state<WeightUnit>('kg');
+	
+	// Subscribe to unit preference
+	$effect(() => {
+		const unsubscribe = unitPreference.subscribe((unit) => {
+			currentUnit = unit;
+		});
+		return unsubscribe;
+	});
 
 	async function loadCustomExercises() {
 		try {
@@ -194,7 +206,9 @@
 										</p>
 									</div>
 									<div class="text-right">
-										<p class="text-xl font-bold text-[var(--color-primary)]">{pr.weight} kg</p>
+										<p class="text-xl font-bold text-[var(--color-primary)]">
+											{formatWeight(pr.weight, currentUnit)}
+										</p>
 										<p class="text-sm text-[var(--color-muted)]">{pr.reps} reps</p>
 									</div>
 								</div>
@@ -242,7 +256,7 @@
 						<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-4">
 							{exerciseProgress.exerciseName}
 						</h3>
-						<StrengthChart progress={exerciseProgress} {chartType} />
+						<StrengthChart progress={exerciseProgress} type={chartType} unit={currentUnit} />
 					</div>
 
 					<!-- Stats -->
@@ -256,7 +270,7 @@
 								<div class="flex justify-between">
 									<span class="text-[var(--color-muted)]">Max Weight</span>
 									<span class="font-bold text-[var(--color-foreground)]">
-										{exerciseProgress.personalRecord.weight} kg
+										{formatWeight(exerciseProgress.personalRecord.weight, currentUnit)}
 									</span>
 								</div>
 								<div class="flex justify-between">

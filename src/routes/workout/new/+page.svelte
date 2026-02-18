@@ -7,6 +7,8 @@
 	import { getRecentExercises } from '$lib/utils/recent-exercises';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import { Search, Plus, X, Check, Activity, Timer, Clock, Info, ChevronUp, ChevronDown, GripVertical } from 'lucide-svelte';
+	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
+	import { convertWeight, getWeightUnitLabel, lbsToKg } from '$lib/utils/weight-conversion';
 
 	let workoutName = $state('');
 	type WorkoutExerciseData = 
@@ -30,6 +32,16 @@
 	
 	// Custom exercises from database
 	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
+	
+	let currentUnit = $state<WeightUnit>('kg');
+	
+	// Subscribe to unit preference
+	$effect(() => {
+		const unsubscribe = unitPreference.subscribe((unit) => {
+			currentUnit = unit;
+		});
+		return unsubscribe;
+	});
 	
 	// Combine default and custom exercises
 	const allExercises = $derived([...exercises, ...customExercises]);
@@ -635,12 +647,18 @@
 										<span class="text-[var(--color-muted)] flex-shrink-0">×</span>
 										<input
 											type="number"
-											value={set.weight}
-											oninput={(e) => updateSet(exerciseIndex, setIndex, 'weight', parseFloat(e.target.value) || 0)}
+											value={convertWeight(set.weight, currentUnit)}
+											step={currentUnit === 'lbs' ? '0.5' : '0.5'}
+											oninput={(e) => {
+												const inputValue = parseFloat(e.target.value) || 0;
+												// Convert from displayed unit back to kg for storage
+												const weightKg = currentUnit === 'lbs' ? lbsToKg(inputValue) : inputValue;
+												updateSet(exerciseIndex, setIndex, 'weight', weightKg);
+											}}
 											class="flex-1 min-w-0 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
 											placeholder="Weight"
 										/>
-										<span class="text-[var(--color-muted)] text-sm flex-shrink-0">kg</span>
+										<span class="text-[var(--color-muted)] text-sm flex-shrink-0">{getWeightUnitLabel(currentUnit)}</span>
 									</div>
 								{/each}
 								<button

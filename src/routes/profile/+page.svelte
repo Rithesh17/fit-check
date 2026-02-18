@@ -5,6 +5,8 @@
 	import { Scale, TrendingDown, Calendar, Plus, Download } from 'lucide-svelte';
 	import WeightChart from '$lib/components/WeightChart.svelte';
 	import { exportAsJSON, exportWorkoutsAsCSV, exportBodyMetricsAsCSV, downloadFile } from '$lib/utils/export';
+	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
+	import { convertWeight, formatWeight, getWeightUnitLabel, lbsToKg } from '$lib/utils/weight-conversion';
 
 	let bodyMetrics = $state<Array<{ id: string; date: string; weight_kg: number | null; body_fat_percentage: number | null }>>([]);
 	let isLoading = $state(true);
@@ -12,6 +14,16 @@
 	let newWeight = $state('');
 	let newBodyFat = $state('');
 	let newDate = $state(new Date().toISOString().split('T')[0]);
+	
+	let currentUnit = $state<WeightUnit>('kg');
+	
+	// Subscribe to unit preference
+	$effect(() => {
+		const unsubscribe = unitPreference.subscribe((unit) => {
+			currentUnit = unit;
+		});
+		return unsubscribe;
+	});
 
 	onMount(async () => {
 		await loadBodyMetrics();
@@ -47,9 +59,13 @@
 		}
 
 		try {
+			// Convert weight to kg if user entered in lbs
+			const weightValue = parseFloat(newWeight);
+			const weightKg = currentUnit === 'lbs' ? lbsToKg(weightValue) : weightValue;
+
 			const { error } = await supabase.from('body_metrics').insert({
 				date: newDate,
-				weight_kg: parseFloat(newWeight),
+				weight_kg: weightKg,
 				body_fat_percentage: newBodyFat ? parseFloat(newBodyFat) : null
 			});
 
@@ -83,6 +99,9 @@
 	}
 
 	const weightChange = $derived(getWeightChange());
+	const weightChangeDisplay = $derived(
+		weightChange ? convertWeight(weightChange.change, currentUnit) : null
+	);
 </script>
 
 <svelte:head>
@@ -98,6 +117,34 @@
 	</div>
 
 	<div class="max-w-md mx-auto px-4 py-6 space-y-6">
+		<!-- Unit Preference Toggle -->
+		<div class="fitness-card">
+			<div class="flex items-center justify-between">
+				<div>
+					<h3 class="font-semibold text-[var(--color-foreground)] mb-1">Weight Unit</h3>
+					<p class="text-sm text-[var(--color-muted)]">Choose your preferred unit</p>
+				</div>
+				<div class="flex gap-2">
+					<button
+						onclick={() => unitPreference.set('kg')}
+						class="px-4 py-2 rounded-lg font-medium transition-colors {currentUnit === 'kg'
+							? 'bg-[var(--color-primary)] text-white'
+							: 'bg-[var(--color-card-hover)] text-[var(--color-foreground)] border border-[var(--color-border)]'}"
+					>
+						kg
+					</button>
+					<button
+						onclick={() => unitPreference.set('lbs')}
+						class="px-4 py-2 rounded-lg font-medium transition-colors {currentUnit === 'lbs'
+							? 'bg-[var(--color-primary)] text-white'
+							: 'bg-[var(--color-card-hover)] text-[var(--color-foreground)] border border-[var(--color-border)]'}"
+					>
+						lbs
+					</button>
+				</div>
+			</div>
+		</div>
+
 		<!-- Weight Tracking Section -->
 		<div>
 			<div class="flex items-center justify-between mb-4">
@@ -129,13 +176,15 @@
 							/>
 						</div>
 						<div>
-							<label for="weight-value" class="block text-sm text-[var(--color-muted)] mb-2">Weight (kg)</label>
+							<label for="weight-value" class="block text-sm text-[var(--color-muted)] mb-2">
+								Weight ({getWeightUnitLabel(currentUnit)})
+							</label>
 							<input
 								id="weight-value"
 								type="number"
 								bind:value={newWeight}
-								placeholder="e.g., 75.5"
-								step="0.1"
+								placeholder={currentUnit === 'lbs' ? 'e.g., 165.5' : 'e.g., 75.5'}
+								step={currentUnit === 'lbs' ? '0.5' : '0.1'}
 								class="w-full px-4 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
 							/>
 						</div>
@@ -175,7 +224,11 @@
 						<div>
 							<p class="text-sm text-[var(--color-muted)] mb-1">Current Weight</p>
 							<p class="text-3xl font-bold text-[var(--color-foreground)]">
-								{bodyMetrics[0].weight_kg?.toFixed(1) || '—'} kg
+								{#if bodyMetrics[0].weight_kg !== null}
+									{formatWeight(bodyMetrics[0].weight_kg, currentUnit)}
+								{:else}
+									—
+								{/if}
 							</p>
 							{#if bodyMetrics[0].body_fat_percentage}
 								<p class="text-sm text-[var(--color-muted)] mt-1">
@@ -183,7 +236,7 @@
 								</p>
 							{/if}
 						</div>
-						{#if weightChange}
+						{#if weightChange && weightChangeDisplay !== null}
 							<div class="text-right">
 								<div
 									class="flex items-center gap-1 {weightChange.change < 0
@@ -196,8 +249,8 @@
 										class="w-4 h-4 {weightChange.change > 0 ? 'rotate-180' : ''}"
 									/>
 									<span class="font-semibold">
-										{weightChange.change > 0 ? '+' : ''}
-										{weightChange.change.toFixed(1)} kg
+										{weightChangeDisplay > 0 ? '+' : ''}
+										{weightChangeDisplay.toFixed(1)} {getWeightUnitLabel(currentUnit)}
 									</span>
 								</div>
 								<p class="text-xs text-[var(--color-muted)] mt-1">
@@ -213,7 +266,7 @@
 				{#if bodyMetrics.filter((m) => m.weight_kg !== null).length > 1}
 					<div class="fitness-card mb-4">
 						<h3 class="text-sm font-semibold text-[var(--color-muted)] mb-4">Weight Trend</h3>
-						<WeightChart data={bodyMetrics} />
+						<WeightChart data={bodyMetrics} unit={currentUnit} />
 					</div>
 				{/if}
 
@@ -230,7 +283,11 @@
 									</div>
 									<div class="text-right">
 										<span class="font-semibold text-[var(--color-foreground)]">
-											{metric.weight_kg?.toFixed(1) || '—'} kg
+											{#if metric.weight_kg !== null}
+												{formatWeight(metric.weight_kg, currentUnit)}
+											{:else}
+												—
+											{/if}
 										</span>
 										{#if metric.body_fat_percentage}
 											<p class="text-xs text-[var(--color-muted)]">
