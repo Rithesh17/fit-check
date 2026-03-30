@@ -1,22 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { supabase } from '$lib/supabase/client';
-	import { exercises, getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
+	import { saveTemplate } from '$lib/services/templates';
+	import { toast } from '$lib/stores/toast';
+	import { exercises, getExerciseById, type Exercise } from '$lib/data/exercises';
 	import { workoutTemplates, templateToWorkoutExercises, type WorkoutTemplate } from '$lib/data/workout-templates';
 	import { getRecentExercises } from '$lib/utils/recent-exercises';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import { Search, Plus, X, Check, Activity, Timer, Clock, Info, ChevronUp, ChevronDown, GripVertical } from 'lucide-svelte';
-	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
+	import { unitPreference } from '$lib/stores/unit-preference';
+	import { loadCustomExercises, type CustomExercise } from '$lib/services/exercises';
+	import type { WorkoutExercise } from '$lib/types/workout';
 	import { convertWeight, getWeightUnitLabel, lbsToKg } from '$lib/utils/weight-conversion';
 
 	let workoutName = $state('');
-	type WorkoutExerciseData = 
-		| { exercise: Exercise; exerciseType: 'weights' | 'bodyweight'; sets: Array<{ reps: number; weight: number; rest: number; completed: boolean }> }
-		| { exercise: Exercise; exerciseType: 'cardio'; durationMinutes: number; calories: number; completed: boolean }
-		| { exercise: Exercise; exerciseType: 'stretches'; durationSeconds: number; reps: number; completed: boolean };
-	
-	let selectedExercises = $state<WorkoutExerciseData[]>([]);
+
+	let selectedExercises = $state<WorkoutExercise[]>([]);
 	let searchQuery = $state('');
 	let showExerciseSearch = $state(false);
 	let showTemplates = $state(true); // Show templates by default
@@ -31,17 +30,9 @@
 	let mood = $state<string>('');
 	
 	// Custom exercises from database
-	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
-	
-	let currentUnit = $state<WeightUnit>('kg');
-	
-	// Subscribe to unit preference
-	$effect(() => {
-		const unsubscribe = unitPreference.subscribe((unit) => {
-			currentUnit = unit;
-		});
-		return unsubscribe;
-	});
+	let customExercises = $state<CustomExercise[]>([]);
+
+	const currentUnit = $derived($unitPreference);
 	
 	// Combine default and custom exercises
 	const allExercises = $derived([...exercises, ...customExercises]);
@@ -53,43 +44,9 @@
 		}
 	});
 
-	async function loadCustomExercises() {
-		try {
-			const { data, error } = await supabase
-				.from('user_exercises')
-				.select('*')
-				.order('created_at', { ascending: false });
-
-			if (error) {
-				console.error('Error loading custom exercises:', error);
-				return;
-			}
-
-			customExercises = (data || []).map((ex: any) => ({
-				id: ex.id,
-				name: ex.name,
-				exerciseType: (ex.exercise_type || 'weights') as ExerciseType,
-				muscleGroups: ex.muscle_groups || [],
-				equipment: ex.equipment,
-				defaultSets: ex.default_sets,
-				defaultReps: ex.default_reps,
-				defaultRestSeconds: ex.default_rest_seconds,
-				defaultDurationMinutes: ex.default_duration_minutes,
-				defaultCalories: ex.default_calories,
-				defaultDurationSeconds: ex.default_duration_seconds,
-				defaultRepsStretches: ex.default_reps_stretches,
-				instructions: ex.instructions || '',
-				videoUrl: ex.video_url || '',
-				isCustom: true
-			}));
-		} catch (error) {
-			console.error('Error loading custom exercises:', error);
-		}
-	}
-
 	// Load recent exercises
 	onMount(async () => {
-		await loadCustomExercises();
+		customExercises = await loadCustomExercises();
 		if (!showTemplates) {
 			recentExercises = await getRecentExercises(8);
 		}
@@ -314,72 +271,38 @@
 
 	async function saveWorkout() {
 		if (selectedExercises.length === 0) {
-			alert('Please add at least one exercise');
+			toast.error('Please add at least one exercise');
 			return;
 		}
 
 		isLoading = true;
 		try {
-			// Save as template only (does not record as workout done for the day)
-			const { data: template, error: templateError } = await supabase
-				.from('workout_templates')
-				.insert({
-					name: workoutName || 'Workout'
-				})
-				.select()
-				.single();
-
-			if (templateError) throw templateError;
-
 			const templateExercises = selectedExercises.map((ex, index) => {
-				const base = {
-					workout_template_id: template.id,
-					exercise_id: ex.exercise.id,
-					exercise_order: index
-				};
-				
+				const base = { exercise_id: ex.exercise.id, exercise_order: index };
+
 				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
 					return {
 						...base,
-						sets: ex.sets.map((set) => ({
-							reps: set.reps,
-							weight: set.weight,
-							rest: set.rest
-						}))
+						sets: ex.sets.map((set) => ({ reps: set.reps, weight: set.weight, rest: set.rest }))
 					};
 				} else if (ex.exerciseType === 'cardio') {
 					return {
 						...base,
-						sets: {
-							type: 'cardio',
-							durationMinutes: ex.durationMinutes,
-							calories: ex.calories
-						}
+						sets: { type: 'cardio', durationMinutes: ex.durationMinutes, calories: ex.calories }
 					};
-				} else if (ex.exerciseType === 'stretches') {
+				} else {
 					return {
 						...base,
-						sets: {
-							type: 'stretches',
-							durationSeconds: ex.durationSeconds,
-							reps: ex.reps
-						}
+						sets: { type: 'stretches', durationSeconds: ex.durationSeconds, reps: ex.reps }
 					};
 				}
-				return base;
 			});
 
-			const { error: exercisesError } = await supabase
-				.from('workout_template_exercises')
-				.insert(templateExercises);
-
-			if (exercisesError) throw exercisesError;
-
-			// Redirect to workouts page so user can start it or create another
+			await saveTemplate(workoutName || 'Workout', templateExercises);
 			goto('/workouts');
 		} catch (error) {
 			console.error('Error saving workout template:', error);
-			alert('Failed to save workout. Please try again.');
+			toast.error('Failed to save workout. Please try again.');
 		} finally {
 			isLoading = false;
 		}

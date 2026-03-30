@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import { goto } from '$app/navigation';
-	import { supabase } from '$lib/supabase/client';
-	import { exercises, getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
+	import { getExerciseById, exercises as allExercises, type Exercise } from '$lib/data/exercises';
+	import { saveWorkout, getLastSetsForExercise } from '$lib/services/workouts';
+	import { toast } from '$lib/stores/toast';
 	import RestTimer from '$lib/components/RestTimer.svelte';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
-	import { Check, X, Play, Pause, SkipForward, Info, Clock, Edit2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp } from 'lucide-svelte';
-	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
+	import { Check, X, Play, Pause, SkipForward, Info, Clock, Edit2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, ArrowUp, ArrowDown, Search } from 'lucide-svelte';
+	import { unitPreference } from '$lib/stores/unit-preference';
+	import { activeWorkout } from '$lib/stores/active-workout';
+	import { loadCustomExercises, type CustomExercise } from '$lib/services/exercises';
+	import type { WorkoutExercise, WorkoutSet } from '$lib/types/workout';
 	import { convertWeight, formatWeight, getWeightUnitLabel, lbsToKg, kgToLbs } from '$lib/utils/weight-conversion';
-
-	type WorkoutExercise = 
-		| { exercise: Exercise; exerciseType: 'weights' | 'bodyweight'; sets: Array<{ reps: number; weight: number; rest: number; completed: boolean; notes?: string; durationSeconds?: number }> }
-		| { exercise: Exercise; exerciseType: 'cardio'; durationMinutes: number; calories: number; completed: boolean }
-		| { exercise: Exercise; exerciseType: 'stretches'; durationSeconds: number; reps: number; completed: boolean };
 
 	// Exercises that use time instead of reps/weight
 	const TIME_BASED_EXERCISES = ['plank', 'farmer-walk', 'dead-bug', 'wall-sit', 'hollow-hold', 'ab-wheel'];
@@ -41,6 +41,10 @@
 	let restDurationBetweenExercises = $state(90); // Rest time between exercises (in seconds) - default 90 seconds
 	let isRestBetweenExercises = $state(false); // Track if we're showing rest between exercises vs sets
 	let showExerciseDetail = $state(false);
+	let showExercisePicker = $state(false);
+	let exercisePickerSearch = $state('');
+	// Map of exerciseId -> last logged set data (for autofill)
+	let previousSetData = $state<Record<string, Array<{ reps: number; weight: number }>>>({});
 	let cardioTimerSeconds = $state(0);
 	let cardioTimerInterval: ReturnType<typeof setInterval> | null = $state(null);
 	let cardioTimerRunning = $state(false);
@@ -49,18 +53,10 @@
 	let setTimerInterval: ReturnType<typeof setInterval> | null = $state(null);
 	let setTimerRunning = $state(false);
 	
-	let currentUnit = $state<WeightUnit>('kg');
-	
+	const currentUnit = $derived($unitPreference);
+
 	// Custom exercises from database
-	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
-	
-	// Subscribe to unit preference
-	$effect(() => {
-		const unsubscribe = unitPreference.subscribe((unit) => {
-			currentUnit = unit;
-		});
-		return unsubscribe;
-	});
+	let customExercises = $state<CustomExercise[]>([]);
 
 	const currentExercise = $derived(
 		selectedExercises[currentExerciseIndex]?.exercise || null
@@ -94,10 +90,13 @@
 		return 1;
 	});
 
+	type StrengthExercise = WorkoutExercise & { exerciseType: 'weights' | 'bodyweight'; sets: WorkoutSet[] };
+	function isStrengthExercise(ex: WorkoutExercise): ex is StrengthExercise {
+		return ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight';
+	}
+
 	const maxRounds = $derived.by(() => {
-		return Math.max(...selectedExercises
-			.filter(ex => ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight')
-			.map(ex => ex.sets.length), 0);
+		return Math.max(...selectedExercises.filter(isStrengthExercise).map(ex => ex.sets.length), 0);
 	});
 
 	// Get exercises in current round with their status
@@ -145,6 +144,18 @@
 
 	const exercisesInRound = $derived(exercisesInCurrentRound.length);
 
+	// Exercise picker: combine built-in + custom, filter by search
+	const pickerExercises = $derived.by(() => {
+		const all = [...allExercises, ...customExercises];
+		if (!exercisePickerSearch.trim()) return all.slice(0, 40);
+		const q = exercisePickerSearch.toLowerCase();
+		return all.filter(
+			(ex) =>
+				ex.name.toLowerCase().includes(q) ||
+				ex.muscleGroups.some((mg) => mg.toLowerCase().includes(q))
+		).slice(0, 40);
+	});
+
 	// Get next exercise in circuit order
 	const nextExerciseInCircuit = $derived.by(() => {
 		if (!showRestTimer || !isRestBetweenExercises) return null;
@@ -190,74 +201,37 @@
 		return null;
 	});
 
-	async function loadCustomExercises() {
-		try {
-			const { data, error } = await supabase
-				.from('user_exercises')
-				.select('*')
-				.order('created_at', { ascending: false });
-
-			if (error) {
-				console.error('Error loading custom exercises:', error);
-				return;
-			}
-
-			customExercises = (data || []).map((ex: any) => ({
-				id: ex.id,
-				name: ex.name,
-				exerciseType: (ex.exercise_type || 'weights') as ExerciseType,
-				muscleGroups: ex.muscle_groups || [],
-				equipment: ex.equipment,
-				defaultSets: ex.default_sets,
-				defaultReps: ex.default_reps,
-				defaultRestSeconds: ex.default_rest_seconds,
-				defaultDurationMinutes: ex.default_duration_minutes,
-				defaultCalories: ex.default_calories,
-				defaultDurationSeconds: ex.default_duration_seconds,
-				defaultRepsStretches: ex.default_reps_stretches,
-				instructions: ex.instructions || '',
-				videoUrl: ex.video_url || '',
-				isCustom: true
-			}));
-		} catch (error) {
-			console.error('Error loading custom exercises:', error);
-		}
-	}
-
 	onMount(async () => {
-		await loadCustomExercises();
-		// Load workout data from sessionStorage (passed from workout creation)
-		const savedWorkout = sessionStorage.getItem('activeWorkout');
-		if (savedWorkout) {
+		customExercises = await loadCustomExercises();
+		// Load workout data from the store (set by the workouts page)
+		const payload = get(activeWorkout);
+		if (payload) {
 			try {
-				const data = JSON.parse(savedWorkout);
-				workoutName = data.name || 'Workout';
-				workoutNotes = data.notes || '';
-				energyLevel = data.energyLevel || null;
-				mood = data.mood || '';
-				restDurationBetweenExercises = data.restDurationBetweenExercises || 90; // Default 90 seconds
-				selectedExercises = data.exercises.map((ex: any): WorkoutExercise | null => {
+				workoutName = payload.name || 'Workout';
+				workoutNotes = payload.notes || '';
+				energyLevel = payload.energyLevel ?? null;
+				mood = payload.mood || '';
+				restDurationBetweenExercises = payload.restDurationBetweenExercises ?? 90;
+				selectedExercises = payload.exercises.map((ex): WorkoutExercise | null => {
 					const exercise = getExerciseById(ex.exerciseId) || customExercises.find(ce => ce.id === ex.exerciseId);
 					if (!exercise) return null;
 					
-					if (ex.exerciseType === 'cardio' || (exercise.exerciseType === 'cardio' && ex.durationMinutes !== undefined)) {
-						const cardioEx: WorkoutExercise = {
+					if (ex.exerciseType === 'cardio') {
+						return {
 							exercise,
-							exerciseType: 'cardio',
+							exerciseType: 'cardio' as const,
 							durationMinutes: ex.durationMinutes || exercise.defaultDurationMinutes || 30,
 							calories: ex.calories || exercise.defaultCalories || 300,
 							completed: ex.completed || false
 						};
-						return cardioEx;
-					} else if (ex.exerciseType === 'stretches' || (exercise.exerciseType === 'stretches' && ex.durationSeconds !== undefined)) {
-						const stretchesEx: WorkoutExercise = {
+					} else if (ex.exerciseType === 'stretches') {
+						return {
 							exercise,
-							exerciseType: 'stretches',
+							exerciseType: 'stretches' as const,
 							durationSeconds: ex.durationSeconds || exercise.defaultDurationSeconds || 60,
 							reps: ex.reps || exercise.defaultRepsStretches || 10,
 							completed: ex.completed || false
 						};
-						return stretchesEx;
 					} else {
 						// Weights or bodyweight
 						const isTimeBased = isTimeBasedExercise(exercise);
@@ -274,22 +248,28 @@
 						};
 						return weightsEx;
 					}
-				}).filter((ex: WorkoutExercise | null): ex is WorkoutExercise => ex !== null && ex !== undefined && ex.exercise !== undefined); // Filter out any invalid exercises
-				
+				}).filter((ex): ex is WorkoutExercise => !!ex && !!ex.exercise);
+
 				if (selectedExercises.length === 0) {
-					alert('No valid exercises found. Redirecting...');
 					goto('/workout/new');
 					return;
 				}
-				
+
 				// Initialize to first incomplete set in circuit order
 				initializeCircuitPosition();
-				
+
+				// Kick off previous-set autofill in background (non-blocking)
+				selectedExercises.forEach((ex, idx) => {
+					if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+						loadPreviousSetData(ex.exercise.id).then(() => applyAutofill(idx));
+					}
+				});
+
 				workoutStartTime = new Date();
 				startDurationTimer();
-				
+
 				// Start cardio timer if first exercise is cardio
-				if (selectedExercises.length > 0 && selectedExercises[0]?.exerciseType === 'cardio') {
+				if (selectedExercises[0]?.exerciseType === 'cardio') {
 					startCardioTimer();
 				}
 			} catch (error) {
@@ -382,9 +362,7 @@
 	 */
 	function initializeCircuitPosition() {
 		// Find first incomplete set in circuit order (round by round)
-		const maxSets = Math.max(...selectedExercises
-			.filter(ex => ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight')
-			.map(ex => ex.sets.length), 0);
+		const maxSets = Math.max(...selectedExercises.filter(isStrengthExercise).map(ex => ex.sets.length), 0);
 		
 		for (let setIdx = 0; setIdx < maxSets; setIdx++) {
 			for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
@@ -700,7 +678,6 @@
 	async function finishWorkout(skipConfirmation = false) {
 		if (isSaving) return;
 		
-		// If called automatically (not from button click), skip confirmation
 		if (!skipConfirmation) {
 			const confirmed = confirm('Finish and save this workout?');
 			if (!confirmed) return;
@@ -710,31 +687,8 @@
 		try {
 			const durationMinutes = Math.ceil(workoutDuration / 60);
 
-			// Create workout
-			const { data: workout, error: workoutError } = await supabase
-				.from('workouts')
-				.insert({
-					name: workoutName || 'Workout',
-					date: workoutStartTime?.toISOString() || new Date().toISOString(),
-					duration_minutes: durationMinutes,
-					notes: workoutNotes || null,
-					energy_level: energyLevel,
-					mood: mood || null
-				} as any)
-				.select()
-				.single();
-
-			if (workoutError) throw workoutError;
-			if (!workout || !('id' in workout)) throw new Error('Failed to create workout');
-
-			// Create workout exercises
-			const createdWorkoutId = (workout as { id: string }).id;
-			const workoutExercises = selectedExercises.map((ex, index) => {
-				const base = {
-					workout_id: createdWorkoutId,
-					exercise_id: ex.exercise.id,
-					exercise_order: index
-				};
+			const exercises = selectedExercises.map((ex, index) => {
+				const base = { exercise_id: ex.exercise.id, exercise_order: index };
 
 				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
 					return {
@@ -750,41 +704,33 @@
 				} else if (ex.exerciseType === 'cardio') {
 					return {
 						...base,
-						sets: {
-							type: 'cardio',
-							durationMinutes: ex.durationMinutes,
-							calories: ex.calories,
-							completed: ex.completed
-						}
+						sets: { type: 'cardio', durationMinutes: ex.durationMinutes, calories: ex.calories, completed: ex.completed }
 					};
-				} else if (ex.exerciseType === 'stretches') {
+				} else {
 					return {
 						...base,
-						sets: {
-							type: 'stretches',
-							durationSeconds: ex.durationSeconds,
-							reps: ex.reps,
-							completed: ex.completed
-						}
+						sets: { type: 'stretches', durationSeconds: ex.durationSeconds, reps: ex.reps, completed: ex.completed }
 					};
 				}
-				return base;
 			});
 
-			const { error: exercisesError } = await supabase
-				.from('workout_exercises')
-				.insert(workoutExercises as any);
+			const workoutId = await saveWorkout(
+				{
+					name: workoutName || 'Workout',
+					date: workoutStartTime?.toISOString() || new Date().toISOString(),
+					duration_minutes: durationMinutes,
+					notes: workoutNotes || null,
+					energy_level: energyLevel,
+					mood: mood || null
+				},
+				exercises
+			);
 
-			if (exercisesError) throw exercisesError;
-
-			// Clear session storage
-			sessionStorage.removeItem('activeWorkout');
-
-			// Redirect to workout detail page
-			goto(`/workout/${createdWorkoutId}`);
+			activeWorkout.clear();
+			goto(`/workout/${workoutId}`);
 		} catch (error) {
 			console.error('Error saving workout:', error);
-			alert('Failed to save workout. Please try again.');
+			toast.error('Failed to save workout. Please try again.');
 		} finally {
 			isSaving = false;
 		}
@@ -905,6 +851,118 @@
 		isRestBetweenExercises = false;
 		currentExerciseIndex = exerciseIndex;
 		currentSetIndex = setIndex;
+	}
+
+	// ─── Previous set autofill ───────────────────────────────────────────────
+
+	async function loadPreviousSetData(exerciseId: string) {
+		if (previousSetData[exerciseId] !== undefined) return; // already fetched
+		const data = await getLastSetsForExercise(exerciseId);
+		if (data) previousSetData = { ...previousSetData, [exerciseId]: data };
+	}
+
+	function applyAutofill(exerciseIndex: number) {
+		const ex = selectedExercises[exerciseIndex];
+		if (ex.exerciseType !== 'weights' && ex.exerciseType !== 'bodyweight') return;
+		const prev = previousSetData[ex.exercise.id];
+		if (!prev || prev.length === 0) return;
+		// Only fill sets whose weight is still 0 (untouched)
+		selectedExercises = selectedExercises.map((e, idx) => {
+			if (idx !== exerciseIndex || (e.exerciseType !== 'weights' && e.exerciseType !== 'bodyweight')) return e;
+			return {
+				...e,
+				sets: e.sets.map((set, si) => {
+					if (set.weight !== 0) return set; // user already set a value
+					const p = prev[si] ?? prev[prev.length - 1];
+					return { ...set, reps: p.reps, weight: p.weight };
+				})
+			};
+		});
+	}
+
+	// ─── Add / Remove / Reorder exercises mid-workout ───────────────────────
+
+	function addExerciseMidWorkout(exercise: Exercise) {
+		const isTimeBased = isTimeBasedExercise(exercise);
+		let newEx: WorkoutExercise;
+
+		if (exercise.exerciseType === 'cardio') {
+			newEx = {
+				exercise,
+				exerciseType: 'cardio' as const,
+				durationMinutes: exercise.defaultDurationMinutes ?? 30,
+				calories: exercise.defaultCalories ?? 300,
+				completed: false
+			};
+		} else if (exercise.exerciseType === 'stretches') {
+			newEx = {
+				exercise,
+				exerciseType: 'stretches' as const,
+				durationSeconds: exercise.defaultDurationSeconds ?? 60,
+				reps: exercise.defaultRepsStretches ?? 10,
+				completed: false
+			};
+		} else {
+			const defaultSet = {
+				reps: exercise.defaultReps ?? 10,
+				weight: 0,
+				rest: exercise.defaultRestSeconds ?? 90,
+				completed: false,
+				notes: '',
+				...(isTimeBased ? { durationSeconds: 0 } : {})
+			};
+			// Match set count to existing exercises (use maxRounds)
+			const setCount = Math.max(maxRounds, 1);
+			newEx = {
+				exercise,
+				exerciseType: exercise.exerciseType === 'bodyweight' ? 'bodyweight' : 'weights',
+				sets: Array.from({ length: setCount }, () => ({ ...defaultSet }))
+			};
+		}
+
+		selectedExercises = [...selectedExercises, newEx];
+		showExercisePicker = false;
+		exercisePickerSearch = '';
+		toast.success(`${exercise.name} added`);
+
+		// Kick off autofill in background
+		if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
+			loadPreviousSetData(exercise.id).then(() =>
+				applyAutofill(selectedExercises.length - 1)
+			);
+		}
+	}
+
+	function removeExercise(index: number) {
+		if (selectedExercises.length <= 1) {
+			toast.error('Cannot remove the last exercise');
+			return;
+		}
+		const name = selectedExercises[index].exercise.name;
+		selectedExercises = selectedExercises.filter((_, i) => i !== index);
+		// Adjust current index if needed
+		if (currentExerciseIndex >= selectedExercises.length) {
+			currentExerciseIndex = selectedExercises.length - 1;
+		}
+		toast.success(`${name} removed`);
+	}
+
+	function moveExerciseUp(index: number) {
+		if (index === 0) return;
+		const arr = [...selectedExercises];
+		[arr[index - 1], arr[index]] = [arr[index], arr[index - 1]];
+		selectedExercises = arr;
+		if (currentExerciseIndex === index) currentExerciseIndex = index - 1;
+		else if (currentExerciseIndex === index - 1) currentExerciseIndex = index;
+	}
+
+	function moveExerciseDown(index: number) {
+		if (index >= selectedExercises.length - 1) return;
+		const arr = [...selectedExercises];
+		[arr[index], arr[index + 1]] = [arr[index + 1], arr[index]];
+		selectedExercises = arr;
+		if (currentExerciseIndex === index) currentExerciseIndex = index + 1;
+		else if (currentExerciseIndex === index + 1) currentExerciseIndex = index;
 	}
 
 	function handleRestComplete() {
@@ -1181,13 +1239,14 @@
 
 						<!-- Round Overview -->
 						{#if showRoundOverview}
-							<div class="p-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg space-y-2">
+							<div class="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card-hover)] px-3 pb-4 pt-3">
 								{#each exercisesInCurrentRound as item}
+								<div class="flex items-center gap-1 {item.isCurrent ? 'bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50 rounded' : ''}">
 									<button
 										onclick={() => jumpToExerciseInRound(item.exerciseIndex, item.setIndex)}
-										class="w-full flex items-center justify-between p-2 rounded hover:bg-[var(--color-background)] transition-colors {item.isCurrent ? 'bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50' : ''}"
+										class="flex-1 flex items-center justify-between p-2 rounded hover:bg-[var(--color-background)] transition-colors text-left min-w-0"
 									>
-										<div class="flex items-center gap-2 flex-1 text-left">
+										<div class="flex items-center gap-2 flex-1 min-w-0">
 											{#if item.completed}
 												<Check class="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" />
 											{:else if item.isCurrent}
@@ -1195,19 +1254,58 @@
 											{:else}
 												<div class="w-4 h-4 rounded-full border-2 border-[var(--color-muted)] flex-shrink-0"></div>
 											{/if}
-											<span class="text-sm font-medium text-[var(--color-foreground)] {item.isCurrent ? 'font-bold' : ''}">
+											<span class="text-sm font-medium text-[var(--color-foreground)] truncate {item.isCurrent ? 'font-bold' : ''}">
 												{item.exercise.name}
 											</span>
 										</div>
-										<div class="text-xs text-[var(--color-muted)]">
+										<div class="text-xs text-[var(--color-muted)] flex-shrink-0 ml-2">
 											{#if isTimeBasedExercise(item.exercise)}
 												{item.set.durationSeconds || 0}s
 											{:else}
-												{item.set.reps} reps {item.set.weight > 0 ? `• ${formatWeight(item.set.weight, currentUnit)}` : ''}
+												{item.set.reps} reps {item.set.weight > 0 ? '• ' + formatWeight(item.set.weight, currentUnit) : ''}
 											{/if}
 										</div>
 									</button>
-								{/each}
+									<div class="flex items-center flex-shrink-0">
+										<button
+											onclick={() => moveExerciseUp(item.exerciseIndex)}
+											disabled={item.exerciseIndex === 0}
+											class="p-1 text-[var(--color-muted)] hover:text-[var(--color-foreground)] disabled:opacity-30 transition-colors"
+											title="Move up"
+										>
+											<ArrowUp class="w-3.5 h-3.5" />
+										</button>
+										<button
+											onclick={() => moveExerciseDown(item.exerciseIndex)}
+											disabled={item.exerciseIndex === selectedExercises.length - 1}
+											class="p-1 text-[var(--color-muted)] hover:text-[var(--color-foreground)] disabled:opacity-30 transition-colors"
+											title="Move down"
+										>
+											<ArrowDown class="w-3.5 h-3.5" />
+										</button>
+										<button
+											onclick={() => removeExercise(item.exerciseIndex)}
+											class="p-1 text-[var(--color-muted)] hover:text-red-400 transition-colors"
+											title="Remove exercise"
+										>
+											<Trash2 class="w-3.5 h-3.5" />
+										</button>
+									</div>
+								</div>
+							{/each}
+							<button
+								type="button"
+								onclick={() => (showExercisePicker = true)}
+								class="mt-1 flex min-h-11 w-full items-center justify-center gap-2 rounded border border-dashed border-[var(--color-border)] px-3 py-3 text-sm font-medium leading-none text-[var(--color-muted)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+							>
+								<span
+									class="inline-flex size-5 shrink-0 items-center justify-center text-current"
+									aria-hidden="true"
+								>
+									<Plus class="block h-4 w-4" strokeWidth={2} />
+								</span>
+								<span>Add Exercise</span>
+							</button>
 							</div>
 						{/if}
 
@@ -1421,7 +1519,17 @@
 							</div>
 						{/if}
 
-						<!-- Set Notes -->
+						<!-- Previous set autofill hint -->
+						{#if currentExercise && previousSetData[currentExercise.id]}
+							{@const prev = previousSetData[currentExercise.id][Math.min(currentSetIndex, previousSetData[currentExercise.id].length - 1)]}
+							{#if prev && prev.weight > 0}
+								<p class="text-xs text-[var(--color-muted)] text-center mb-2">
+									Last session: {prev.reps} reps × {formatWeight(prev.weight, currentUnit)}
+								</p>
+							{/if}
+						{/if}
+
+												<!-- Set Notes -->
 						<div>
 							<div class="flex items-center justify-between mb-2">
 								<label for="set-notes" class="block text-sm font-semibold text-[var(--color-muted)]">
@@ -1623,6 +1731,70 @@
 	/>
 {/if}
 
+
+<!-- Exercise Picker Modal (z above BottomNav z-50 so list isn’t covered) -->
+{#if showExercisePicker}
+	<div
+		class="fixed inset-0 z-[60] flex items-end bg-black/60"
+		onclick={() => (showExercisePicker = false)}
+		role="dialog"
+		aria-modal="true"
+		aria-label="Add exercise"
+	>
+		<div
+			class="mx-auto flex h-[85vh] max-h-[100dvh] w-full max-w-md min-h-0 flex-col overflow-hidden rounded-t-2xl bg-[var(--color-background)] shadow-2xl sm:h-[40rem]"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<div class="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
+				<h3 class="font-bold text-[var(--color-foreground)]">Add Exercise</h3>
+				<button
+					type="button"
+					onclick={() => (showExercisePicker = false)}
+					class="text-[var(--color-muted)] hover:text-[var(--color-foreground)] transition-colors"
+					aria-label="Close"
+				>
+					<X class="w-5 h-5" />
+				</button>
+			</div>
+			<div class="border-b border-[var(--color-border)] px-4 py-3">
+				<div class="relative">
+					<Search class="absolute left-3 top-1/2 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+					<input
+						type="text"
+						bind:value={exercisePickerSearch}
+						placeholder="Search exercises..."
+						class="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] py-2 pl-9 pr-4 text-sm text-[var(--color-foreground)] focus:border-[var(--color-primary)] focus:outline-none"
+					/>
+				</div>
+			</div>
+			<div class="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2 py-2 pb-4 [-webkit-overflow-scrolling:touch]">
+				{#each pickerExercises as ex (ex.id)}
+					<button
+						type="button"
+						onclick={() => addExerciseMidWorkout(ex)}
+						class="flex w-full min-h-12 items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[var(--color-card)]"
+					>
+						<div class="min-w-0 flex-1 leading-snug">
+							<div class="text-sm font-medium text-[var(--color-foreground)]">{ex.name}</div>
+							<div class="mt-0.5 text-xs text-[var(--color-muted)]">
+								{ex.muscleGroups.slice(0, 2).join(', ')} • {ex.exerciseType}
+							</div>
+						</div>
+						<span
+							class="inline-flex size-9 shrink-0 items-center justify-center text-[var(--color-primary)]"
+							aria-hidden="true"
+						>
+							<Plus class="block h-4 w-4" strokeWidth={2} />
+						</span>
+					</button>
+				{/each}
+				{#if pickerExercises.length === 0}
+					<p class="py-8 text-center text-sm text-[var(--color-muted)]">No exercises found</p>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
 <style>
 	.fitness-card {
 		background: var(--color-card);

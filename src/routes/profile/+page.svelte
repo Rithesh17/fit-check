@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { supabase } from '$lib/supabase/client';
 	import { goto } from '$app/navigation';
 	import { Scale, TrendingDown, Calendar, Plus, Download } from 'lucide-svelte';
 	import WeightChart from '$lib/components/WeightChart.svelte';
 	import { exportAsJSON, exportWorkoutsAsCSV, exportBodyMetricsAsCSV, downloadFile } from '$lib/utils/export';
-	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
+	import { unitPreference } from '$lib/stores/unit-preference';
 	import { convertWeight, formatWeight, getWeightUnitLabel, lbsToKg } from '$lib/utils/weight-conversion';
+	import { loadBodyMetrics, saveBodyMetric } from '$lib/services/body-metrics';
+	import { toast } from '$lib/stores/toast';
 
 	let bodyMetrics = $state<Array<{ id: string; date: string; weight_kg: number | null; body_fat_percentage: number | null }>>([]);
 	let isLoading = $state(true);
@@ -15,71 +16,47 @@
 	let newBodyFat = $state('');
 	let newDate = $state(new Date().toISOString().split('T')[0]);
 	
-	let currentUnit = $state<WeightUnit>('kg');
-	
-	// Subscribe to unit preference
-	$effect(() => {
-		const unsubscribe = unitPreference.subscribe((unit) => {
-			currentUnit = unit;
-		});
-		return unsubscribe;
-	});
+	const currentUnit = $derived($unitPreference);
 
 	onMount(async () => {
-		await loadBodyMetrics();
+		await fetchBodyMetrics();
 	});
 
-	async function loadBodyMetrics() {
+	async function fetchBodyMetrics() {
 		try {
 			isLoading = true;
-			const { data, error } = await supabase
-				.from('body_metrics')
-				.select('*')
-				.order('date', { ascending: false })
-				.limit(30);
-
-			if (error) throw error;
-			bodyMetrics = (data || []).map((m) => ({
-				id: m.id,
-				date: m.date,
-				weight_kg: m.weight_kg,
-				body_fat_percentage: m.body_fat_percentage
-			}));
+			bodyMetrics = await loadBodyMetrics(30);
 		} catch (error) {
 			console.error('Error loading body metrics:', error);
+			toast.error('Failed to load weight data');
 		} finally {
 			isLoading = false;
 		}
 	}
 
-	async function saveBodyMetric() {
+	async function addBodyMetric() {
 		if (!newWeight) {
-			alert('Please enter your weight');
+			toast.error('Please enter your weight');
 			return;
 		}
 
 		try {
-			// Convert weight to kg if user entered in lbs
 			const weightValue = parseFloat(newWeight);
 			const weightKg = currentUnit === 'lbs' ? lbsToKg(weightValue) : weightValue;
-
-			const { error } = await supabase.from('body_metrics').insert({
+			await saveBodyMetric({
 				date: newDate,
 				weight_kg: weightKg,
 				body_fat_percentage: newBodyFat ? parseFloat(newBodyFat) : null
 			});
-
-			if (error) throw error;
-
-			// Reset form and reload
 			newWeight = '';
 			newBodyFat = '';
 			newDate = new Date().toISOString().split('T')[0];
 			showAddForm = false;
-			await loadBodyMetrics();
+			toast.success('Weight saved');
+			await fetchBodyMetrics();
 		} catch (error) {
 			console.error('Error saving body metric:', error);
-			alert('Failed to save. Please try again.');
+			toast.error('Failed to save. Please try again.');
 		}
 	}
 
@@ -201,7 +178,7 @@
 						</div>
 						<div class="flex gap-2">
 							<button
-								onclick={saveBodyMetric}
+								onclick={addBodyMetric}
 								class="flex-1 px-4 py-2 bg-[var(--gradient-primary)] text-white rounded-lg font-medium"
 							>
 								Save
