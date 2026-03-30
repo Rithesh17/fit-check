@@ -2,8 +2,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
 	import { supabase } from '$lib/supabase/client';
-	import { getExerciseById, type ExerciseType } from '$lib/data/exercises';
-	import type { Exercise } from '$lib/data/exercises';
+	import { getExerciseById } from '$lib/data/exercises';
+	import { loadCustomExercises, type CustomExercise } from '$lib/services/exercises';
 
 	let muscleGroupData = $state<Map<string, number>>(new Map());
 	let isLoading = $state(true);
@@ -11,7 +11,7 @@
 	let chartInstance: Chart | null = null;
 	
 	// Custom exercises from database
-	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
+	let customExercises = $state<CustomExercise[]>([]);
 
 	$effect(() => {
 		loadMuscleGroupData();
@@ -29,44 +29,10 @@
 		};
 	});
 
-	async function loadCustomExercises() {
-		try {
-			const { data, error } = await supabase
-				.from('user_exercises')
-				.select('*')
-				.order('created_at', { ascending: false });
-
-			if (error) {
-				console.error('Error loading custom exercises:', error);
-				return;
-			}
-
-			customExercises = (data || []).map((ex: any) => ({
-				id: ex.id,
-				name: ex.name,
-				exerciseType: (ex.exercise_type || 'weights') as ExerciseType,
-				muscleGroups: ex.muscle_groups || [],
-				equipment: ex.equipment,
-				defaultSets: ex.default_sets,
-				defaultReps: ex.default_reps,
-				defaultRestSeconds: ex.default_rest_seconds,
-				defaultDurationMinutes: ex.default_duration_minutes,
-				defaultCalories: ex.default_calories,
-				defaultDurationSeconds: ex.default_duration_seconds,
-				defaultRepsStretches: ex.default_reps_stretches,
-				instructions: ex.instructions || '',
-				videoUrl: ex.video_url || '',
-				isCustom: true
-			}));
-		} catch (error) {
-			console.error('Error loading custom exercises:', error);
-		}
-	}
-
 	async function loadMuscleGroupData() {
 		try {
 			isLoading = true;
-			await loadCustomExercises();
+			customExercises = await loadCustomExercises();
 			
 			const { data: workoutExercises, error } = await supabase
 				.from('workout_exercises')

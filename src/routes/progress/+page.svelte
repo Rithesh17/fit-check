@@ -1,14 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase/client';
-	import { exercises, getExerciseById, type ExerciseType } from '$lib/data/exercises';
+	import { getExerciseById } from '$lib/data/exercises';
 	import { calculateExerciseProgress, getPersonalRecords, type ExerciseProgress } from '$lib/utils/progress';
 	import StrengthChart from '$lib/components/StrengthChart.svelte';
 	import VolumeTrendChart from '$lib/components/VolumeTrendChart.svelte';
 	import MuscleGroupChart from '$lib/components/MuscleGroupChart.svelte';
 	import { TrendingUp, Award, Activity } from 'lucide-svelte';
-	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
-	import { convertWeight, formatWeight, getWeightUnitLabel } from '$lib/utils/weight-conversion';
+	import { unitPreference } from '$lib/stores/unit-preference';
+	import { loadCustomExercises } from '$lib/services/exercises';
+	import { formatWeight } from '$lib/utils/weight-conversion';
 
 	let selectedExerciseId = $state<string | null>(null);
 	let exerciseProgress = $state<ExerciseProgress | null>(null);
@@ -21,43 +22,12 @@
 	let exerciseMap = $state<Map<string, Array<{ date: string; sets: any }>>>(new Map());
 	
 	// Custom exercises from database
-	let customExercises = $state<Array<{ id: string; name: string; exerciseType: ExerciseType; isCustom: boolean }>>([]);
-	
-	let currentUnit = $state<WeightUnit>('kg');
-	
-	// Subscribe to unit preference
-	$effect(() => {
-		const unsubscribe = unitPreference.subscribe((unit) => {
-			currentUnit = unit;
-		});
-		return unsubscribe;
-	});
+	let customExercises = $state<Array<{ id: string; name: string; isCustom: boolean }>>([]);
 
-	async function loadCustomExercises() {
-		try {
-			const { data, error } = await supabase
-				.from('user_exercises')
-				.select('*')
-				.order('created_at', { ascending: false });
-
-			if (error) {
-				console.error('Error loading custom exercises:', error);
-				return;
-			}
-
-			customExercises = (data || []).map((ex: any) => ({
-				id: ex.id,
-				name: ex.name,
-				exerciseType: (ex.exercise_type || 'weights') as ExerciseType,
-				isCustom: true
-			}));
-		} catch (error) {
-			console.error('Error loading custom exercises:', error);
-		}
-	}
+	const currentUnit = $derived($unitPreference);
 
 	onMount(async () => {
-		await loadCustomExercises();
+		customExercises = await loadCustomExercises();
 		await loadProgressData();
 	});
 

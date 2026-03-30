@@ -128,6 +128,18 @@ export const exercises: Exercise[] = [
 		instructions: 'Bench at 30-45° angle, press dumbbells from upper chest',
 		videoUrl: 'https://www.youtube.com/watch?v=qSmo-8QapTg'
 	},
+	{
+		id: 'incline-dumbbell-fly',
+		name: 'Incline Dumbbell Fly',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest'],
+		equipment: 'Dumbbells',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: '30-45° bench, wide arc, stretch at bottom, squeeze upper chest'
+	},
 
 	// BACK EXERCISES
 	{
@@ -331,6 +343,18 @@ export const exercises: Exercise[] = [
 		defaultRestSeconds: 60,
 		videoUrl: 'https://youtu.be/6DeLZ6cbgWQ?si=H5YIFk8OkNBPxy-L',
 		instructions: 'Alternate or together, full range of motion'
+	},
+	{
+		id: 'incline-dumbbell-curl',
+		name: 'Incline Dumbbell Curl',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'biceps',
+		muscleGroups: ['biceps'],
+		equipment: 'Dumbbells',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 60,
+		instructions: 'Bench at 45-60°, arms hang behind torso, curl without swinging'
 	},
 	{
 		id: 'hammer-curl',

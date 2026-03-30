@@ -2,9 +2,10 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase/client';
-	import { getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
+	import { getExerciseById, type Exercise } from '$lib/data/exercises';
 	import { Calendar, Clock, Activity, ArrowLeft, Check } from 'lucide-svelte';
-	import { unitPreference, type WeightUnit } from '$lib/stores/unit-preference';
+	import { unitPreference } from '$lib/stores/unit-preference';
+	import { loadCustomExercises, type CustomExercise } from '$lib/services/exercises';
 	import { convertWeight, formatWeight, getWeightUnitLabel } from '$lib/utils/weight-conversion';
 
 	type WorkoutExerciseSets = 
@@ -36,17 +37,9 @@
 	let isLoading = $state(true);
 	
 	// Custom exercises from database
-	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
+	let customExercises = $state<CustomExercise[]>([]);
 	
-	let currentUnit = $state<WeightUnit>('kg');
-	
-	// Subscribe to unit preference
-	$effect(() => {
-		const unsubscribe = unitPreference.subscribe((unit) => {
-			currentUnit = unit;
-		});
-		return unsubscribe;
-	});
+	const currentUnit = $derived($unitPreference);
 
 	$effect(() => {
 		if (params.id) {
@@ -54,44 +47,10 @@
 		}
 	});
 
-	async function loadCustomExercises() {
-		try {
-			const { data, error } = await supabase
-				.from('user_exercises')
-				.select('*')
-				.order('created_at', { ascending: false });
-
-			if (error) {
-				console.error('Error loading custom exercises:', error);
-				return;
-			}
-
-			customExercises = (data || []).map((ex: any) => ({
-				id: ex.id,
-				name: ex.name,
-				exerciseType: (ex.exercise_type || 'weights') as ExerciseType,
-				muscleGroups: ex.muscle_groups || [],
-				equipment: ex.equipment,
-				defaultSets: ex.default_sets,
-				defaultReps: ex.default_reps,
-				defaultRestSeconds: ex.default_rest_seconds,
-				defaultDurationMinutes: ex.default_duration_minutes,
-				defaultCalories: ex.default_calories,
-				defaultDurationSeconds: ex.default_duration_seconds,
-				defaultRepsStretches: ex.default_reps_stretches,
-				instructions: ex.instructions || '',
-				videoUrl: ex.video_url || '',
-				isCustom: true
-			}));
-		} catch (error) {
-			console.error('Error loading custom exercises:', error);
-		}
-	}
-
 	async function loadWorkout(id: string) {
 		try {
 			isLoading = true;
-			await loadCustomExercises();
+			customExercises = await loadCustomExercises();
 
 			// Fetch workout
 			const { data: workoutData, error: workoutError } = await supabase

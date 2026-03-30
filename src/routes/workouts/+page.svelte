@@ -1,12 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { supabase } from '$lib/supabase/client';
-	import { exercises, getExerciseById, getExercisesByMuscleGroup, searchExercises, type Exercise, type ExerciseType } from '$lib/data/exercises';
-	import { Search, X, Plus, ChevronLeft, ChevronRight, Activity, BookOpen, Play } from 'lucide-svelte';
+	import { exercises, getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
+	import { Search, X, Plus, ChevronLeft, ChevronRight, Activity, BookOpen, Play, Calendar, Clock } from 'lucide-svelte';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import ExerciseEditor from '$lib/components/ExerciseEditor.svelte';
 	import { goto } from '$app/navigation';
-	import { Calendar, Clock } from 'lucide-svelte';
+	import { loadCustomExercises } from '$lib/services/exercises';
+	import { loadTemplates, deleteTemplate } from '$lib/services/templates';
+	import { loadRecentWorkouts } from '$lib/services/workouts';
+	import { activeWorkout, type ActiveWorkoutExercise } from '$lib/stores/active-workout';
+	import { formatWorkoutDate } from '$lib/utils/dates';
+	import { toast } from '$lib/stores/toast';
 
 	// View mode: 'workouts' or 'exercises'
 	let viewMode = $state<'workouts' | 'exercises'>('workouts');
@@ -117,65 +121,29 @@
 	async function loadWorkouts() {
 		try {
 			isLoadingWorkouts = true;
-			// Load saved templates (workout plans to start)
-			const { data: templates, error: templatesError } = await supabase
-				.from('workout_templates')
-				.select('id, name')
-				.order('created_at', { ascending: false });
-
-			if (templatesError) throw templatesError;
-
-			const { data: templateExs, error: templateExsError } = await supabase
-				.from('workout_template_exercises')
-				.select('workout_template_id, exercise_id, exercise_order, sets')
-				.order('exercise_order', { ascending: true });
-
-			if (templateExsError) throw templateExsError;
-
-			const map: Record<string, Array<{ exercise_id: string; exercise_order: number; sets: Array<{ reps: number; weight: number; rest: number }> }>> = {};
-			for (const row of templateExs || []) {
-				const arr = map[row.workout_template_id] || [];
-				arr.push({
-					exercise_id: row.exercise_id,
-					exercise_order: row.exercise_order,
-					sets: (row.sets as Array<{ reps: number; weight: number; rest: number }>) || []
-				});
-				map[row.workout_template_id] = arr;
-			}
-			templateExercisesMap = map;
-
-			workoutTemplates = (templates || []).map((t: any) => ({
-				id: t.id,
-				name: t.name,
-				exercise_count: (map[t.id] || []).length
-			}));
-
-			// Load completed workout sessions (history)
-			const { data: completed, error: completedError } = await supabase
-				.from('workouts')
-				.select(`
-					id,
-					name,
-					date,
-					duration_minutes,
-					workout_exercises(count)
-				`)
-				.order('date', { ascending: false })
-				.limit(20);
-
-			if (completedError) throw completedError;
-
-			completedWorkouts = (completed || []).map((w: any) => ({
-				id: w.id,
-				name: w.name,
-				date: w.date,
-				duration_minutes: w.duration_minutes,
-				exercise_count: Array.isArray(w.workout_exercises) ? w.workout_exercises.length : 0
-			}));
+			const [{ templates, exercisesMap }, completed] = await Promise.all([
+				loadTemplates(),
+				loadRecentWorkouts(20)
+			]);
+			workoutTemplates = templates;
+			templateExercisesMap = exercisesMap as any;
+			completedWorkouts = completed;
 		} catch (error) {
 			console.error('Error loading workouts:', error);
+			toast.error('Failed to load workouts');
 		} finally {
 			isLoadingWorkouts = false;
+		}
+	}
+
+	async function removeTemplate(id: string) {
+		try {
+			await deleteTemplate(id);
+			workoutTemplates = workoutTemplates.filter((t) => t.id !== id);
+			toast.success('Template deleted');
+		} catch (error) {
+			console.error('Error deleting template:', error);
+			toast.error('Failed to delete template');
 		}
 	}
 
@@ -201,95 +169,45 @@
 					}
 					return { exerciseId: exercise.id, exerciseType: exercise.exerciseType, sets };
 				} else if (exercise.exerciseType === 'cardio') {
-					const cardioData = (typeof ex.sets === 'object' && ex.sets !== null && !Array.isArray(ex.sets) && ex.sets.type === 'cardio')
-						? ex.sets
-						: { type: 'cardio', durationMinutes: exercise.defaultDurationMinutes || 30, calories: exercise.defaultCalories || 300 };
-					return { exerciseId: exercise.id, exerciseType: 'cardio', ...cardioData, completed: false };
+					const rawSets = ex.sets as any;
+					return {
+						exerciseId: exercise.id,
+						exerciseType: 'cardio' as const,
+						durationMinutes: rawSets?.durationMinutes || exercise.defaultDurationMinutes || 30,
+						calories: rawSets?.calories || exercise.defaultCalories || 300,
+						completed: false
+					};
 				} else if (exercise.exerciseType === 'stretches') {
-					const stretchesData = (typeof ex.sets === 'object' && ex.sets !== null && !Array.isArray(ex.sets) && ex.sets.type === 'stretches')
-						? ex.sets
-						: { type: 'stretches', durationSeconds: exercise.defaultDurationSeconds || 60, reps: exercise.defaultRepsStretches || 10 };
-					return { exerciseId: exercise.id, exerciseType: 'stretches', ...stretchesData, completed: false };
+					const rawSets = ex.sets as any;
+					return {
+						exerciseId: exercise.id,
+						exerciseType: 'stretches' as const,
+						durationSeconds: rawSets?.durationSeconds || exercise.defaultDurationSeconds || 60,
+						reps: rawSets?.reps || exercise.defaultRepsStretches || 10,
+						completed: false
+					};
 				}
 				return null;
 			})
-			.filter(Boolean);
+			.filter((e): e is ActiveWorkoutExercise => e !== null);
 		if (exercisesPayload.length === 0) {
-			alert('This template has no valid exercises.');
+			toast.error('This template has no valid exercises.');
 			return;
 		}
-		const workoutData = {
+		activeWorkout.start({
 			name,
 			notes: '',
-			energyLevel: null as number | null,
+			energyLevel: null,
 			mood: '',
+			restDurationBetweenExercises: 90,
 			exercises: exercisesPayload
-		};
-		sessionStorage.setItem('activeWorkout', JSON.stringify(workoutData));
+		});
 		goto('/workout/active');
 	}
 
-	function formatDate(dateString: string): string {
-		const date = new Date(dateString);
-		const today = new Date();
-		const yesterday = new Date(today);
-		yesterday.setDate(yesterday.getDate() - 1);
-
-		const dateMidnight = new Date(date);
-		dateMidnight.setHours(0, 0, 0, 0);
-		const todayMidnight = new Date(today);
-		todayMidnight.setHours(0, 0, 0, 0);
-		const yesterdayMidnight = new Date(yesterday);
-		yesterdayMidnight.setHours(0, 0, 0, 0);
-
-		if (dateMidnight.getTime() === todayMidnight.getTime()) {
-			return 'Today';
-		} else if (dateMidnight.getTime() === yesterdayMidnight.getTime()) {
-			return 'Yesterday';
-		} else {
-			return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-		}
-	}
-
-	async function loadCustomExercises() {
-		try {
-			const { data, error } = await supabase
-				.from('user_exercises')
-				.select('*')
-				.order('created_at', { ascending: false });
-
-			if (error) {
-				console.error('Error loading custom exercises:', error);
-				return;
-			}
-
-			customExercises = (data || []).map((ex: any) => ({
-				id: ex.id,
-				name: ex.name,
-				exerciseType: (ex.exercise_type || 'weights') as ExerciseType,
-				muscleGroups: ex.muscle_groups || [],
-				equipment: ex.equipment,
-				defaultSets: ex.default_sets,
-				defaultReps: ex.default_reps,
-				defaultRestSeconds: ex.default_rest_seconds,
-				defaultDurationMinutes: ex.default_duration_minutes,
-				defaultCalories: ex.default_calories,
-				defaultDurationSeconds: ex.default_duration_seconds,
-				defaultRepsStretches: ex.default_reps_stretches,
-				instructions: ex.instructions || '',
-				videoUrl: ex.video_url || '',
-				isCustom: true
-			}));
-		} catch (error) {
-			console.error('Error loading custom exercises:', error);
-		}
-	}
 
 	onMount(async () => {
-		await loadCustomExercises();
-		if (viewMode === 'workouts') {
-			loadWorkouts();
-		}
+		customExercises = await loadCustomExercises();
 	});
 
 	$effect(() => {
@@ -498,7 +416,7 @@
 										<div class="flex-1">
 											<div class="flex items-center gap-2 mb-2">
 												<Calendar class="w-4 h-4 text-[var(--color-muted)]" />
-												<span class="text-sm text-[var(--color-muted)]">{formatDate(workout.date)}</span>
+												<span class="text-sm text-[var(--color-muted)]">{formatWorkoutDate(workout.date)}</span>
 											</div>
 											<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-2">
 												{workout.name || 'Workout'}
