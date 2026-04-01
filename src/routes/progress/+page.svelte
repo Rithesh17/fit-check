@@ -6,7 +6,7 @@
 	import StrengthChart from '$lib/components/StrengthChart.svelte';
 	import VolumeTrendChart from '$lib/components/VolumeTrendChart.svelte';
 	import MuscleGroupChart from '$lib/components/MuscleGroupChart.svelte';
-	import { TrendingUp, Award, Activity } from 'lucide-svelte';
+	import { TrendingUp, Award, Activity, ExternalLink } from 'lucide-svelte';
 	import { unitPreference } from '$lib/stores/unit-preference';
 	import { loadCustomExercises } from '$lib/services/exercises';
 	import { formatWeight } from '$lib/utils/weight-conversion';
@@ -167,10 +167,17 @@
 					</div>
 					<div class="space-y-2">
 						{#each personalRecords.slice(0, 5) as pr}
+							{@const prExId = usedExercises.find((e) => e.name === pr.exerciseName)?.id}
 							<div class="fitness-card">
 								<div class="flex items-center justify-between">
 									<div>
-										<h3 class="font-semibold text-[var(--color-foreground)]">{pr.exerciseName}</h3>
+										{#if prExId}
+											<a href="/progress/{prExId}" class="font-semibold text-[var(--color-foreground)] hover:text-[var(--color-primary)] transition-colors">
+												{pr.exerciseName}
+											</a>
+										{:else}
+											<h3 class="font-semibold text-[var(--color-foreground)]">{pr.exerciseName}</h3>
+										{/if}
 										<p class="text-sm text-[var(--color-muted)]">
 											{pr.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
 										</p>
@@ -193,12 +200,21 @@
 				<h2 class="text-lg font-semibold text-[var(--color-foreground)] mb-4">Strength Progression</h2>
 				<select
 					bind:value={selectedExerciseId}
-					class="w-full px-4 py-3 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)] mb-4"
+					class="w-full px-4 py-3 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)] mb-2"
 				>
 					{#each usedExercises as ex}
 						<option value={ex.id}>{ex.name}</option>
 					{/each}
 				</select>
+				{#if selectedExerciseId}
+					<a
+						href="/progress/{selectedExerciseId}"
+						class="inline-flex items-center gap-1 text-sm text-[var(--color-primary)] hover:underline mb-4"
+					>
+						<ExternalLink class="w-3 h-3" />
+						View full progress page
+					</a>
+				{/if}
 
 				{#if exerciseProgress && exerciseProgress.dates.length > 0}
 					<!-- Chart Type Toggle -->

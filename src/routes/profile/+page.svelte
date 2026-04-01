@@ -1,13 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { Scale, TrendingDown, Calendar, Plus, Download } from 'lucide-svelte';
+	import { Scale, TrendingDown, Calendar, Plus, Download, Target, Trash2 } from 'lucide-svelte';
 	import WeightChart from '$lib/components/WeightChart.svelte';
 	import { exportAsJSON, exportWorkoutsAsCSV, exportBodyMetricsAsCSV, downloadFile } from '$lib/utils/export';
 	import { unitPreference } from '$lib/stores/unit-preference';
 	import { convertWeight, formatWeight, getWeightUnitLabel, lbsToKg } from '$lib/utils/weight-conversion';
 	import { loadBodyMetrics, saveBodyMetric } from '$lib/services/body-metrics';
 	import { toast } from '$lib/stores/toast';
+	import { goals, type Goal } from '$lib/stores/goals';
+	import { supabase } from '$lib/supabase/client';
+	import { getExerciseById } from '$lib/data/exercises';
+	import { loadCustomExercises } from '$lib/services/exercises';
+	import { calculateExerciseProgress } from '$lib/utils/progress';
 
 	let bodyMetrics = $state<Array<{ id: string; date: string; weight_kg: number | null; body_fat_percentage: number | null }>>([]);
 	let isLoading = $state(true);
@@ -18,8 +23,19 @@
 	
 	const currentUnit = $derived($unitPreference);
 
+	// Goals state
+	const currentGoals = $derived($goals);
+	let showGoalForm = $state(false);
+	let goalType = $state<'exercise' | 'weight'>('exercise');
+	let goalExerciseId = $state('');
+	let goalTargetValue = $state('');
+	let goalTargetDate = $state('');
+	let usedExercises = $state<Array<{ id: string; name: string }>>([]);
+	let currentValues = $state<Map<string, number>>(new Map());
+
 	onMount(async () => {
 		await fetchBodyMetrics();
+		await loadGoalCurrentValues();
 	});
 
 	async function fetchBodyMetrics() {
@@ -79,6 +95,93 @@
 	const weightChangeDisplay = $derived(
 		weightChange ? convertWeight(weightChange.change, currentUnit) : null
 	);
+
+	async function loadGoalCurrentValues() {
+		const customExercises = await loadCustomExercises();
+
+		// Populate usedExercises for the goal form
+		const { data: workoutExercises } = await supabase
+			.from('workout_exercises')
+			.select('exercise_id')
+			.limit(500);
+
+		const usedIds = [...new Set((workoutExercises || []).map((we: any) => we.exercise_id))];
+		usedExercises = usedIds
+			.map((id) => {
+				const ex = getExerciseById(id) || customExercises.find((ce) => ce.id === id);
+				return ex ? { id, name: ex.name } : null;
+			})
+			.filter((e): e is { id: string; name: string } => e !== null)
+			.sort((a, b) => a.name.localeCompare(b.name));
+
+		// Load current values for each goal
+		const exerciseGoals = currentGoals.filter((g) => g.type === 'exercise' && g.exerciseId);
+		if (exerciseGoals.length > 0) {
+			const { data: workouts } = await supabase.from('workouts').select('id, date');
+			const { data: allWorkoutExercises } = await supabase
+				.from('workout_exercises')
+				.select('exercise_id, workout_id, sets');
+
+			if (workouts && allWorkoutExercises) {
+				const workoutDateMap = new Map((workouts as any[]).map((w) => [w.id, w.date]));
+				for (const goal of exerciseGoals) {
+					const wd = (allWorkoutExercises as any[])
+						.filter((we) => we.exercise_id === goal.exerciseId)
+						.map((we) => ({ date: workoutDateMap.get(we.workout_id) || '', sets: we.sets }))
+						.filter((d) => d.date);
+					if (wd.length > 0) {
+						const ex = getExerciseById(goal.exerciseId!) || customExercises.find((ce) => ce.id === goal.exerciseId);
+						if (ex) {
+							const progress = calculateExerciseProgress(goal.exerciseId!, ex.name, wd);
+							if (progress.personalRecord) {
+								currentValues = new Map(currentValues).set(goal.id, progress.personalRecord.weight);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Body weight goals
+		for (const goal of currentGoals.filter((g) => g.type === 'weight')) {
+			if (bodyMetrics[0]?.weight_kg != null) {
+				currentValues = new Map(currentValues).set(goal.id, bodyMetrics[0].weight_kg);
+			}
+		}
+	}
+
+	function addGoal() {
+		if (!goalTargetValue) {
+			toast.error('Please enter a target value');
+			return;
+		}
+		if (goalType === 'exercise' && !goalExerciseId) {
+			toast.error('Please select an exercise');
+			return;
+		}
+		const targetKg =
+			currentUnit === 'lbs' ? lbsToKg(parseFloat(goalTargetValue)) : parseFloat(goalTargetValue);
+		const exerciseInfo = goalType === 'exercise' ? usedExercises.find((e) => e.id === goalExerciseId) : null;
+		goals.addGoal({
+			type: goalType,
+			exerciseId: goalType === 'exercise' ? goalExerciseId : undefined,
+			exerciseName: exerciseInfo?.name,
+			targetValue: targetKg,
+			targetDate: goalTargetDate || undefined
+		});
+		showGoalForm = false;
+		goalTargetValue = '';
+		goalTargetDate = '';
+		goalExerciseId = '';
+		toast.success('Goal added');
+		loadGoalCurrentValues();
+	}
+
+	function getGoalProgress(goal: Goal): number {
+		const current = currentValues.get(goal.id) ?? 0;
+		if (goal.targetValue <= 0 || current <= 0) return 0;
+		return Math.min(100, (current / goal.targetValue) * 100);
+	}
 </script>
 
 <svelte:head>
@@ -120,6 +223,150 @@
 					</button>
 				</div>
 			</div>
+		</div>
+
+		<!-- Goals Section -->
+		<div>
+			<div class="flex items-center justify-between mb-4">
+				<h2 class="text-lg font-semibold text-[var(--color-foreground)] flex items-center gap-2">
+					<Target class="w-5 h-5 text-[var(--color-primary)]" />
+					Goals
+				</h2>
+				<button
+					onclick={() => (showGoalForm = !showGoalForm)}
+					class="px-4 py-2 bg-[var(--gradient-primary)] text-white rounded-lg font-medium flex items-center gap-2"
+				>
+					<Plus class="w-4 h-4" />
+					Add Goal
+				</button>
+			</div>
+
+			{#if showGoalForm}
+				<div class="fitness-card mb-4 space-y-4">
+					<h3 class="font-semibold text-[var(--color-foreground)]">New Goal</h3>
+
+					<!-- Goal Type Toggle -->
+					<div class="flex gap-2">
+						<button
+							onclick={() => (goalType = 'exercise')}
+							class="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors {goalType === 'exercise'
+								? 'bg-[var(--color-primary)] text-white'
+								: 'bg-[var(--color-card-hover)] text-[var(--color-foreground)] border border-[var(--color-border)]'}"
+						>
+							Exercise Strength
+						</button>
+						<button
+							onclick={() => (goalType = 'weight')}
+							class="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors {goalType === 'weight'
+								? 'bg-[var(--color-primary)] text-white'
+								: 'bg-[var(--color-card-hover)] text-[var(--color-foreground)] border border-[var(--color-border)]'}"
+						>
+							Body Weight
+						</button>
+					</div>
+
+					{#if goalType === 'exercise'}
+						<div>
+							<label for="goal-exercise" class="block text-sm text-[var(--color-muted)] mb-2">Exercise</label>
+							<select
+								id="goal-exercise"
+								bind:value={goalExerciseId}
+								class="w-full px-4 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+							>
+								<option value="">Select exercise...</option>
+								{#each usedExercises as ex}
+									<option value={ex.id}>{ex.name}</option>
+								{/each}
+							</select>
+						</div>
+					{/if}
+
+					<div>
+						<label for="goal-target" class="block text-sm text-[var(--color-muted)] mb-2">
+							Target Weight ({getWeightUnitLabel(currentUnit)})
+						</label>
+						<input
+							id="goal-target"
+							type="number"
+							bind:value={goalTargetValue}
+							placeholder={currentUnit === 'lbs' ? 'e.g., 225' : 'e.g., 100'}
+							step="0.5"
+							class="w-full px-4 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+						/>
+					</div>
+
+					<div>
+						<label for="goal-date" class="block text-sm text-[var(--color-muted)] mb-2">Target Date (optional)</label>
+						<input
+							id="goal-date"
+							type="date"
+							bind:value={goalTargetDate}
+							class="w-full px-4 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+						/>
+					</div>
+
+					<div class="flex gap-2">
+						<button
+							onclick={addGoal}
+							class="flex-1 px-4 py-2 bg-[var(--gradient-primary)] text-white rounded-lg font-medium"
+						>
+							Save
+						</button>
+						<button
+							onclick={() => (showGoalForm = false)}
+							class="px-4 py-2 bg-[var(--color-card-hover)] border border-[var(--color-border)] text-[var(--color-foreground)] rounded-lg"
+						>
+							Cancel
+						</button>
+					</div>
+				</div>
+			{/if}
+
+			{#if currentGoals.length === 0 && !showGoalForm}
+				<div class="fitness-card text-center py-8">
+					<Target class="w-12 h-12 text-[var(--color-muted)] mx-auto mb-3 opacity-50" />
+					<p class="text-[var(--color-muted)]">No goals yet. Set a target to track your progress!</p>
+				</div>
+			{:else}
+				<div class="space-y-3">
+					{#each currentGoals as goal}
+						{@const current = currentValues.get(goal.id) ?? 0}
+						{@const progressPct = getGoalProgress(goal)}
+						<div class="fitness-card">
+							<div class="flex items-start justify-between mb-3">
+								<div>
+									<h3 class="font-semibold text-[var(--color-foreground)]">
+										{goal.type === 'exercise' ? (goal.exerciseName || 'Exercise') : 'Body Weight'}
+									</h3>
+									<p class="text-sm text-[var(--color-muted)]">
+										Target: {formatWeight(goal.targetValue, currentUnit)}
+										{#if goal.targetDate}
+											· {new Date(goal.targetDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+										{/if}
+									</p>
+								</div>
+								<button
+									onclick={() => goals.deleteGoal(goal.id)}
+									class="p-1 text-[var(--color-muted)] hover:text-[var(--color-danger)] transition-colors"
+									title="Delete goal"
+								>
+									<Trash2 class="w-4 h-4" />
+								</button>
+							</div>
+							<div class="w-full bg-[var(--color-card-hover)] rounded-full h-2 mb-2">
+								<div
+									class="h-2 rounded-full transition-all"
+									style="width: {progressPct.toFixed(0)}%; background: var(--gradient-primary);"
+								></div>
+							</div>
+							<div class="flex justify-between text-xs text-[var(--color-muted)]">
+								<span>Current: {current > 0 ? formatWeight(current, currentUnit) : 'No data yet'}</span>
+								<span>{progressPct.toFixed(0)}%</span>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 
 		<!-- Weight Tracking Section -->

@@ -80,3 +80,56 @@ export async function deleteTemplate(id: string): Promise<void> {
 	const { error } = await supabase.from('workout_templates').delete().eq('id', id);
 	if (error) throw error;
 }
+
+export async function loadTemplateById(id: string): Promise<{
+	template: Template;
+	exercises: TemplateExercise[];
+} | null> {
+	const [{ data: template, error: tError }, { data: templateExs, error: teError }] =
+		await Promise.all([
+			supabase.from('workout_templates').select('id, name').eq('id', id).single(),
+			supabase
+				.from('workout_template_exercises')
+				.select('exercise_id, exercise_order, sets')
+				.eq('workout_template_id', id)
+				.order('exercise_order', { ascending: true })
+		]);
+
+	if (tError || teError || !template) return null;
+
+	const t = template as any;
+	const exs = (templateExs || []) as any[];
+	return {
+		template: { id: t.id, name: t.name, exercise_count: exs.length },
+		exercises: exs.map((e) => ({
+			exercise_id: e.exercise_id,
+			exercise_order: e.exercise_order,
+			sets: e.sets
+		}))
+	};
+}
+
+export async function updateTemplate(
+	id: string,
+	name: string,
+	exercises: TemplateExercise[]
+): Promise<void> {
+	const { error: nameError } = await supabase
+		.from('workout_templates')
+		.update({ name } as any)
+		.eq('id', id);
+	if (nameError) throw nameError;
+
+	const { error: delError } = await supabase
+		.from('workout_template_exercises')
+		.delete()
+		.eq('workout_template_id', id);
+	if (delError) throw delError;
+
+	if (exercises.length > 0) {
+		const { error: insError } = await supabase
+			.from('workout_template_exercises')
+			.insert(exercises.map((ex) => ({ ...ex, workout_template_id: id })) as any);
+		if (insError) throw insError;
+	}
+}

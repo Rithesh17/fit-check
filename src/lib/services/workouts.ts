@@ -69,6 +69,46 @@ export async function loadRecentWorkouts(limit = 20): Promise<RecentWorkout[]> {
 	}));
 }
 
+export interface WorkoutPage {
+	workouts: RecentWorkout[];
+	hasMore: boolean;
+}
+
+const PAGE_SIZE = 20;
+
+export async function loadWorkoutPage(
+	page: number,
+	filter: 'all' | 'week' = 'all'
+): Promise<WorkoutPage> {
+	let query = supabase
+		.from('workouts')
+		.select('id, name, date, duration_minutes, workout_exercises(count)')
+		.order('date', { ascending: false })
+		.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+	if (filter === 'week') {
+		const weekStart = new Date();
+		weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+		weekStart.setHours(0, 0, 0, 0);
+		query = query.gte('date', weekStart.toISOString());
+	}
+
+	const { data, error } = await query;
+	if (error) throw error;
+
+	const rows = data || [];
+	return {
+		workouts: rows.slice(0, PAGE_SIZE).map((w: any) => ({
+			id: w.id,
+			name: w.name,
+			date: w.date,
+			duration_minutes: w.duration_minutes,
+			exercise_count: Array.isArray(w.workout_exercises) ? w.workout_exercises.length : 0
+		})),
+		hasMore: rows.length > PAGE_SIZE
+	};
+}
+
 /**
  * Fetch the most recent logged set data for a given exercise.
  * Used for previous-set autofill on the active workout screen.

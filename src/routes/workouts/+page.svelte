@@ -1,16 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { exercises, getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
-	import { Search, X, Plus, ChevronLeft, ChevronRight, Activity, BookOpen, Play, Calendar, Clock } from 'lucide-svelte';
+	import { Search, X, Plus, ChevronLeft, ChevronRight, Activity, BookOpen, Play, Calendar, Clock, Pencil, Trash2 } from 'lucide-svelte';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import ExerciseEditor from '$lib/components/ExerciseEditor.svelte';
 	import { goto } from '$app/navigation';
 	import { loadCustomExercises } from '$lib/services/exercises';
 	import { loadTemplates, deleteTemplate } from '$lib/services/templates';
-	import { loadRecentWorkouts } from '$lib/services/workouts';
 	import { activeWorkout, type ActiveWorkoutExercise } from '$lib/stores/active-workout';
-	import { formatWorkoutDate } from '$lib/utils/dates';
 	import { toast } from '$lib/stores/toast';
+	import { weeklySchedule, DAYS_OF_WEEK, DAY_LABELS } from '$lib/stores/schedule';
 
 	// View mode: 'workouts' or 'exercises'
 	let viewMode = $state<'workouts' | 'exercises'>('workouts');
@@ -27,11 +26,13 @@
 	// Custom exercises from database
 	let customExercises = $state<Array<Exercise & { id: string; isCustom: boolean }>>([]);
 
-	// Workout-related state: templates (saved plans) + completed sessions (history)
+	// Workout-related state: templates (saved plans)
 	let workoutTemplates = $state<Array<{ id: string; name: string | null; exercise_count: number }>>([]);
-	let completedWorkouts = $state<any[]>([]);
 	let isLoadingWorkouts = $state(true);
 	let templateExercisesMap = $state<Record<string, Array<{ exercise_id: string; exercise_order: number; sets: Array<{ reps: number; weight: number; rest: number }> }>>>({});
+
+	// Weekly schedule
+	const currentSchedule = $derived($weeklySchedule);
 
 	// Pagination
 	const EXERCISES_PER_PAGE = 20;
@@ -121,13 +122,9 @@
 	async function loadWorkouts() {
 		try {
 			isLoadingWorkouts = true;
-			const [{ templates, exercisesMap }, completed] = await Promise.all([
-				loadTemplates(),
-				loadRecentWorkouts(20)
-			]);
+			const { templates, exercisesMap } = await loadTemplates();
 			workoutTemplates = templates;
 			templateExercisesMap = exercisesMap as any;
-			completedWorkouts = completed;
 		} catch (error) {
 			console.error('Error loading workouts:', error);
 			toast.error('Failed to load workouts');
@@ -137,6 +134,7 @@
 	}
 
 	async function removeTemplate(id: string) {
+		if (!confirm('Delete this template? This cannot be undone.')) return;
 		try {
 			await deleteTemplate(id);
 			workoutTemplates = workoutTemplates.filter((t) => t.id !== id);
@@ -377,9 +375,7 @@
 							</div>
 						</button>
 						{#each workoutTemplates as template}
-							<div
-								class="fitness-card flex items-center justify-between gap-3"
-							>
+							<div class="fitness-card flex items-center justify-between gap-3">
 								<div class="flex-1 min-w-0">
 									<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-1 truncate">
 										{template.name || 'Workout'}
@@ -389,59 +385,76 @@
 										<span>{template.exercise_count} exercise{template.exercise_count !== 1 ? 's' : ''}</span>
 									</div>
 								</div>
-								<button
-									onclick={() => startTemplate(template.id)}
-									class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform flex items-center gap-2 flex-shrink-0"
-									title="Start this workout"
-								>
-									<Play class="w-4 h-4" />
-									Start
-								</button>
+								<div class="flex items-center gap-2 flex-shrink-0">
+									<button
+										onclick={() => goto(`/workout/edit/${template.id}`)}
+										class="p-2 text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors"
+										title="Edit template"
+									>
+										<Pencil class="w-4 h-4" />
+									</button>
+									<button
+										onclick={() => removeTemplate(template.id)}
+										class="p-2 text-[var(--color-muted)] hover:text-[var(--color-danger)] transition-colors"
+										title="Delete template"
+									>
+										<Trash2 class="w-4 h-4" />
+									</button>
+									<button
+										onclick={() => startTemplate(template.id)}
+										class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg hover:scale-[1.02] transition-transform flex items-center gap-2"
+										title="Start this workout"
+									>
+										<Play class="w-4 h-4" />
+										Start
+									</button>
+								</div>
 							</div>
 						{/each}
 					</div>
 				</div>
 
-				<!-- Recent completed sessions -->
-				{#if completedWorkouts.length > 0}
-					<div>
-						<h2 class="text-sm font-semibold text-[var(--color-muted)] mb-3">Recent sessions</h2>
-						<div class="space-y-3">
-							{#each completedWorkouts as workout}
-								<button
-									onclick={() => goto(`/workout/${workout.id}`)}
-									class="w-full fitness-card text-left hover:scale-[1.02] transition-transform"
+				<!-- Weekly Schedule -->
+				<div class="mb-6">
+					<h2 class="text-sm font-semibold text-[var(--color-muted)] mb-3 flex items-center gap-2">
+						<Calendar class="w-4 h-4" />
+						Weekly Schedule
+					</h2>
+					<div class="fitness-card space-y-3">
+						{#each DAYS_OF_WEEK as day}
+							<div class="flex items-center gap-3">
+								<span class="text-sm font-medium text-[var(--color-muted)] w-8 flex-shrink-0">
+									{DAY_LABELS[day]}
+								</span>
+								<select
+									value={currentSchedule[day] ?? ''}
+									onchange={(e) => {
+										const val = (e.target as HTMLSelectElement).value;
+										weeklySchedule.setDay(day, val || null);
+									}}
+									class="flex-1 px-3 py-1.5 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-sm focus:outline-none focus:border-[var(--color-primary)]"
 								>
-									<div class="flex items-start justify-between">
-										<div class="flex-1">
-											<div class="flex items-center gap-2 mb-2">
-												<Calendar class="w-4 h-4 text-[var(--color-muted)]" />
-												<span class="text-sm text-[var(--color-muted)]">{formatWorkoutDate(workout.date)}</span>
-											</div>
-											<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-2">
-												{workout.name || 'Workout'}
-											</h3>
-											<div class="flex items-center gap-4 text-sm text-[var(--color-muted)]">
-												{#if workout.exercise_count !== undefined}
-													<div class="flex items-center gap-1">
-														<Activity class="w-4 h-4" />
-														<span>{workout.exercise_count} exercise{workout.exercise_count !== 1 ? 's' : ''}</span>
-													</div>
-												{/if}
-												{#if workout.duration_minutes}
-													<div class="flex items-center gap-1">
-														<Clock class="w-4 h-4" />
-														<span>{workout.duration_minutes} min</span>
-													</div>
-												{/if}
-											</div>
-										</div>
-									</div>
-								</button>
-							{/each}
-						</div>
+									<option value="">Rest day</option>
+									{#each workoutTemplates as template}
+										<option value={template.id}>{template.name || 'Workout'}</option>
+									{/each}
+								</select>
+							</div>
+						{/each}
 					</div>
-				{/if}
+				</div>
+
+				<!-- Link to full history -->
+				<a
+					href="/workouts/history"
+					class="fitness-card flex items-center justify-between hover:scale-[1.02] transition-transform border-dashed"
+				>
+					<div class="flex items-center gap-3">
+						<Clock class="w-5 h-5 text-[var(--color-muted)]" />
+						<span class="font-medium text-[var(--color-foreground)]">View workout history</span>
+					</div>
+					<span class="text-[var(--color-primary)] text-sm font-medium">→</span>
+				</a>
 			{/if}
 		{:else}
 			<!-- Exercises View -->

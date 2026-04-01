@@ -41,6 +41,7 @@
 	let restDurationBetweenExercises = $state(90); // Rest time between exercises (in seconds) - default 90 seconds
 	let isRestBetweenExercises = $state(false); // Track if we're showing rest between exercises vs sets
 	let showExerciseDetail = $state(false);
+	let nextDetailExercise = $state<Exercise | null>(null);
 	let showExercisePicker = $state(false);
 	let exercisePickerSearch = $state('');
 	// Map of exerciseId -> last logged set data (for autofill)
@@ -1107,9 +1108,18 @@
 					<div class="space-y-3">
 						<!-- Exercise Name -->
 						<div>
-							<h4 class="text-xl font-bold text-[var(--color-foreground)] mb-2">
-								{nextExerciseInCircuit.exercise.name}
-							</h4>
+							<div class="flex items-center gap-2 mb-2">
+								<h4 class="text-xl font-bold text-[var(--color-foreground)] flex-1">
+									{nextExerciseInCircuit.exercise.name}
+								</h4>
+								<button
+									onclick={() => (nextDetailExercise = nextExerciseInCircuit!.exercise)}
+									class="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors flex-shrink-0"
+									aria-label="View exercise details"
+								>
+									<Info class="w-5 h-5" />
+								</button>
+							</div>
 							{#if nextExerciseInCircuit.exercise.muscleGroups && nextExerciseInCircuit.exercise.muscleGroups.length > 0}
 								<div class="flex flex-wrap gap-2 mb-2">
 									{#each nextExerciseInCircuit.exercise.muscleGroups as mg}
@@ -1728,6 +1738,15 @@
 			showExerciseDetail = false;
 			// Could open editor here if needed
 		}}
+	/>
+{/if}
+
+<!-- Next Exercise Detail Modal (from rest timer "Up Next") -->
+{#if nextDetailExercise}
+	<ExerciseDetail
+		exercise={nextDetailExercise}
+		onClose={() => (nextDetailExercise = null)}
+		onEdit={() => (nextDetailExercise = null)}
 	/>
 {/if}
 
