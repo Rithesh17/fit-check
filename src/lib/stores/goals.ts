@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { supabase } from '$lib/supabase/client';
 
 export interface Goal {
 	id: string;
@@ -10,45 +11,61 @@ export interface Goal {
 	createdAt: string;
 }
 
-const STORAGE_KEY = 'fit-check-goals';
+function rowToGoal(row: any): Goal {
+	return {
+		id: row.id,
+		type: row.type,
+		exerciseId: row.exercise_id ?? undefined,
+		exerciseName: row.exercise_name ?? undefined,
+		targetValue: row.target_value,
+		targetDate: row.target_date ?? undefined,
+		createdAt: row.created_at
+	};
+}
 
-function getStoredGoals(): Goal[] {
-	if (typeof window === 'undefined') return [];
-	try {
-		const stored = localStorage.getItem(STORAGE_KEY);
-		return stored ? JSON.parse(stored) : [];
-	} catch {
-		return [];
-	}
+async function fetchGoals(): Promise<Goal[]> {
+	const { data, error } = await supabase
+		.from('goals')
+		.select('*')
+		.order('created_at', { ascending: false });
+
+	if (error || !data) return [];
+	return data.map(rowToGoal);
 }
 
 function createGoalsStore() {
-	const { subscribe, update } = writable<Goal[]>(getStoredGoals());
+	const { subscribe, update, set } = writable<Goal[]>([]);
 
-	function persist(goals: Goal[]) {
-		if (typeof window !== 'undefined') {
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(goals));
-		}
+	// Auto-load from Supabase on client
+	if (typeof window !== 'undefined') {
+		fetchGoals().then((g) => set(g));
 	}
 
 	return {
 		subscribe,
-		addGoal(goal: Omit<Goal, 'id' | 'createdAt'>) {
-			update((goals) => {
-				const next = [
-					...goals,
-					{ ...goal, id: crypto.randomUUID(), createdAt: new Date().toISOString() }
-				];
-				persist(next);
-				return next;
-			});
+		async addGoal(goal: Omit<Goal, 'id' | 'createdAt'>) {
+			const { data, error } = await supabase
+				.from('goals')
+				.insert({
+					type: goal.type,
+					exercise_id: goal.exerciseId ?? null,
+					exercise_name: goal.exerciseName ?? null,
+					target_value: goal.targetValue,
+					target_date: goal.targetDate ?? null
+				})
+				.select()
+				.single();
+
+			if (error || !data) {
+				console.error('Failed to save goal', error);
+				return;
+			}
+
+			update((goals) => [rowToGoal(data), ...goals]);
 		},
-		deleteGoal(id: string) {
-			update((goals) => {
-				const next = goals.filter((g) => g.id !== id);
-				persist(next);
-				return next;
-			});
+		async deleteGoal(id: string) {
+			await supabase.from('goals').delete().eq('id', id);
+			update((goals) => goals.filter((g) => g.id !== id));
 		}
 	};
 }

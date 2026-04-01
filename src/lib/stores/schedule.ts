@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { supabase } from '$lib/supabase/client';
 
 export type DayOfWeek =
 	| 'sunday'
@@ -31,8 +32,6 @@ export const DAY_LABELS: Record<DayOfWeek, string> = {
 
 export type WeeklySchedule = Record<DayOfWeek, string | null>;
 
-const STORAGE_KEY = 'fit-check-weekly-schedule';
-
 const DEFAULT_SCHEDULE: WeeklySchedule = {
 	sunday: null,
 	monday: null,
@@ -43,39 +42,65 @@ const DEFAULT_SCHEDULE: WeeklySchedule = {
 	saturday: null
 };
 
-function getStoredSchedule(): WeeklySchedule {
-	if (typeof window === 'undefined') return { ...DEFAULT_SCHEDULE };
-	try {
-		const stored = localStorage.getItem(STORAGE_KEY);
-		if (!stored) return { ...DEFAULT_SCHEDULE };
-		return { ...DEFAULT_SCHEDULE, ...JSON.parse(stored) };
-	} catch {
-		return { ...DEFAULT_SCHEDULE };
+async function fetchSchedule(): Promise<WeeklySchedule> {
+	const { data, error } = await supabase
+		.from('weekly_schedule')
+		.select('day_of_week, workout_template_id, is_active');
+
+	if (error || !data) return { ...DEFAULT_SCHEDULE };
+
+	const schedule = { ...DEFAULT_SCHEDULE };
+	for (const row of data) {
+		const day = DAYS_OF_WEEK[row.day_of_week as number];
+		if (day) {
+			schedule[day] = row.is_active ? (row.workout_template_id as string) : null;
+		}
 	}
+	return schedule;
 }
 
 function createScheduleStore() {
-	const { subscribe, set, update } = writable<WeeklySchedule>(getStoredSchedule());
+	const { subscribe, set, update } = writable<WeeklySchedule>({ ...DEFAULT_SCHEDULE });
 
-	function persist(schedule: WeeklySchedule) {
-		if (typeof window !== 'undefined') {
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(schedule));
-		}
+	// Auto-load from Supabase on client
+	if (typeof window !== 'undefined') {
+		fetchSchedule().then((s) => set(s));
 	}
 
 	return {
 		subscribe,
-		setDay(day: DayOfWeek, templateId: string | null) {
-			update((schedule) => {
-				const next = { ...schedule, [day]: templateId };
-				persist(next);
-				return next;
-			});
+		async setDay(day: DayOfWeek, templateId: string | null) {
+			// Optimistic update
+			update((s) => ({ ...s, [day]: templateId }));
+
+			const dayIndex = DAYS_OF_WEEK.indexOf(day);
+
+			const { data: existing } = await supabase
+				.from('weekly_schedule')
+				.select('id')
+				.eq('day_of_week', dayIndex)
+				.maybeSingle();
+
+			if (existing) {
+				await supabase
+					.from('weekly_schedule')
+					.update({
+						workout_template_id: templateId,
+						is_active: templateId !== null,
+						updated_at: new Date().toISOString()
+					})
+					.eq('id', (existing as any).id);
+			} else if (templateId) {
+				await supabase.from('weekly_schedule').insert({
+					day_of_week: dayIndex,
+					workout_template_id: templateId,
+					is_active: true
+				});
+			}
 		},
-		reset() {
-			const empty = { ...DEFAULT_SCHEDULE };
-			persist(empty);
-			set(empty);
+		async reset() {
+			set({ ...DEFAULT_SCHEDULE });
+			await supabase.from('weekly_schedule').delete().in('day_of_week', [0, 1, 2, 3, 4, 5, 6]);
 		}
 	};
 }
