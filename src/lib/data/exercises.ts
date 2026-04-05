@@ -307,16 +307,16 @@ export const exercises: Exercise[] = [
 		instructions: 'Bent over, raise arms wide, squeeze rear delts'
 	},
 	{
-		id: 'rear-delt-fly',
-		name: 'Rear Delt Fly',
+		id: 'rear-delt-fly-machine',
+		name: 'Rear Delt Fly Machine',
 		exerciseType: 'weights',
 		primaryMuscleGroup: 'shoulders',
 		muscleGroups: ['shoulders'],
-		equipment: 'Dumbbell',
+		equipment: 'Machine',
 		defaultSets: 3,
 		defaultReps: 15,
 		defaultRestSeconds: 60,
-		instructions: 'Bent over, raise arms wide, target rear delts'
+		instructions: 'Raise arms wide, target rear delts'
 	},
 	{
 		id: 'arnold-press',
@@ -1106,6 +1106,34 @@ export const exercises: Exercise[] = [
 		instructions: 'Track time or reps'
 	}
 ];
+
+/** Preset equipment for weights/bodyweight — derived from built-in exercises so filters and add-exercise stay in sync. */
+export const WEIGHTS_BODYWEIGHT_EQUIPMENT_OPTIONS: readonly string[] = Array.from(
+	new Set(
+		exercises
+			.filter((ex) => ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight')
+			.map((ex) => ex.equipment)
+	)
+).sort();
+
+/** Preset equipment for cardio — from library, plus Other for custom entries. */
+export const CARDIO_EQUIPMENT_OPTIONS: readonly string[] = (() => {
+	const uniq = Array.from(
+		new Set(exercises.filter((ex) => ex.exerciseType === 'cardio').map((ex) => ex.equipment))
+	);
+	if (!uniq.includes('Other')) uniq.push('Other');
+	return uniq.sort();
+})();
+
+/** Preset equipment for stretches — from library, or a minimal default when the library has none. */
+export const STRETCHES_EQUIPMENT_OPTIONS: readonly string[] = (() => {
+	const uniq = Array.from(
+		new Set(exercises.filter((ex) => ex.exerciseType === 'stretches').map((ex) => ex.equipment))
+	);
+	if (uniq.length === 0) return ['Bodyweight', 'Other'];
+	if (!uniq.includes('Other')) uniq.push('Other');
+	return uniq.sort();
+})();
 
 // Helper functions
 export function getExercisesByMuscleGroup(muscleGroup: string): Exercise[] {

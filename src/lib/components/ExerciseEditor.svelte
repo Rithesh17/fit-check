@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { X, Save, Trash2, RotateCcw } from 'lucide-svelte';
 	import { supabase } from '$lib/supabase/client';
-	import { isTimeBased, type Exercise, type ExerciseType } from '$lib/data/exercises';
+	import {
+		isTimeBased,
+		type Exercise,
+		type ExerciseType,
+		WEIGHTS_BODYWEIGHT_EQUIPMENT_OPTIONS,
+		CARDIO_EQUIPMENT_OPTIONS,
+		STRETCHES_EQUIPMENT_OPTIONS
+	} from '$lib/data/exercises';
 	import {
 		getExerciseOverride,
 		saveExerciseOverride,
@@ -63,47 +70,13 @@
 		'forearms'
 	];
 
-	// Equipment dropdown options - Weights/Bodyweight
-	const weightsEquipmentOptions = [
-		'Barbell',
-		'Dumbbells',
-		'Cable Machine',
-		'Bodyweight',
-		'Pull-up Bar',
-		'Dip Bar',
-		'Leg Press Machine',
-		'Leg Extension Machine',
-		'Leg Curl Machine',
-		'Calf Raise Machine',
-		'Seated Calf Machine',
-		'Back Extension Machine',
-		'Reverse Hyper Machine',
-		'T-Bar Machine',
-		'Ab Wheel',
-		'None',
-		'Other'
-	];
-
-	// Equipment dropdown options - Cardio
-	const cardioEquipmentOptions = [
-		'Treadmill',
-		'Bike',
-		'Stationary Bike',
-		'Rowing Machine',
-		'Elliptical',
-		'Stair Climber',
-		'Jump Rope',
-		'None',
-		'Other'
-	];
-
-	// Get equipment options based on exercise type
+	// Equipment presets match built-in exercise library ($lib/data/exercises.ts)
 	const equipmentOptions = $derived(
-		exerciseType === 'cardio' 
-			? cardioEquipmentOptions 
+		exerciseType === 'cardio'
+			? [...CARDIO_EQUIPMENT_OPTIONS]
 			: exerciseType === 'stretches'
-			? ['None', 'Other'] // Stretches typically don't need equipment
-			: weightsEquipmentOptions // weights and bodyweight
+				? [...STRETCHES_EQUIPMENT_OPTIONS]
+				: [...WEIGHTS_BODYWEIGHT_EQUIPMENT_OPTIONS]
 	);
 
 	// Track custom equipment entries
