@@ -8,8 +8,7 @@
 	import { goto } from '$app/navigation';
 	import { weeklySchedule, DAYS_OF_WEEK } from '$lib/stores/schedule';
 	import { loadTemplates } from '$lib/services/templates';
-	import { loadCustomExercises } from '$lib/services/exercises';
-	import { getExerciseById } from '$lib/data/exercises';
+	import { loadCustomExercises, findExercise } from '$lib/services/exercises';
 	import { activeWorkout, type ActiveWorkoutExercise } from '$lib/stores/active-workout';
 
 	let { data } = $props();
@@ -85,7 +84,7 @@
 		const exs = templateExercisesMap[scheduledTemplate.id] || [];
 		const exercisesPayload = exs
 			.map((ex: any) => {
-				const exercise = getExerciseById(ex.exercise_id) || customExercises.find((ce) => ce.id === ex.exercise_id);
+				const exercise = findExercise(ex.exercise_id, customExercises);
 				if (!exercise) return null;
 				if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
 					let sets;
@@ -96,13 +95,13 @@
 					} else {
 						sets = [{ reps: exercise.defaultReps || 10, weight: 0, rest: exercise.defaultRestSeconds || 60, completed: false }];
 					}
-					return { exerciseId: exercise.id, exerciseType: exercise.exerciseType, sets };
+					return { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: exercise.exerciseType, sets };
 				} else if (exercise.exerciseType === 'cardio') {
 					const rawSets = ex.sets as any;
-					return { exerciseId: exercise.id, exerciseType: 'cardio' as const, durationMinutes: rawSets?.durationMinutes || exercise.defaultDurationMinutes || 30, calories: rawSets?.calories || exercise.defaultCalories || 300, completed: false };
+					return { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'cardio' as const, durationMinutes: rawSets?.durationMinutes || exercise.defaultDurationMinutes || 30, calories: rawSets?.calories || exercise.defaultCalories || 300, completed: false };
 				} else if (exercise.exerciseType === 'stretches') {
 					const rawSets = ex.sets as any;
-					return { exerciseId: exercise.id, exerciseType: 'stretches' as const, durationSeconds: rawSets?.durationSeconds || exercise.defaultDurationSeconds || 60, reps: rawSets?.reps || exercise.defaultRepsStretches || 10, completed: false };
+					return { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'stretches' as const, durationSeconds: rawSets?.durationSeconds || exercise.defaultDurationSeconds || 60, reps: rawSets?.reps || exercise.defaultRepsStretches || 10, completed: false };
 				}
 				return null;
 			})

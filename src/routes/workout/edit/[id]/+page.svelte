@@ -4,12 +4,12 @@
 	import { page } from '$app/stores';
 	import { loadTemplateById, updateTemplate } from '$lib/services/templates';
 	import { toast } from '$lib/stores/toast';
-	import { exercises, getExerciseById, type Exercise } from '$lib/data/exercises';
+	import { exercises, isTimeBased, type Exercise } from '$lib/data/exercises';
 	import { getRecentExercises } from '$lib/utils/recent-exercises';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import { Search, Plus, X, Check, Activity, Timer, Clock, Info, ChevronUp, ChevronDown } from 'lucide-svelte';
 	import { unitPreference } from '$lib/stores/unit-preference';
-	import { loadCustomExercises, type CustomExercise } from '$lib/services/exercises';
+	import { loadCustomExercises, findExercise, type CustomExercise } from '$lib/services/exercises';
 	import type { WorkoutExercise } from '$lib/types/workout';
 	import { convertWeight, getWeightUnitLabel, lbsToKg } from '$lib/utils/weight-conversion';
 
@@ -63,33 +63,30 @@
 		// Reconstruct WorkoutExercise[] from stored template exercises
 		selectedExercises = result.exercises
 			.map((ex) => {
-				const exercise =
-					getExerciseById(ex.exercise_id) ||
-					customExercises.find((ce) => ce.id === ex.exercise_id);
+				const exercise = findExercise(ex.exercise_id, customExercises);
 				if (!exercise) return null;
 
 				if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
+					const timeBased = isTimeBased(exercise);
 					let sets;
+					const defaultSet = {
+						reps: timeBased ? 0 : (exercise.defaultReps || 10),
+						weight: 0,
+						rest: exercise.defaultRestSeconds || 60,
+						...(timeBased ? { durationSeconds: exercise.defaultDurationSeconds || 45 } : {})
+					};
 					if (Array.isArray(ex.sets)) {
-						sets = ((ex.sets as any[]).length
-							? (ex.sets as any[])
-							: [
-									{
-										reps: exercise.defaultReps || 10,
-										weight: 0,
-										rest: exercise.defaultRestSeconds || 60
-									}
-								]
-						).map((s: any) => ({ ...s, completed: false }));
+						sets = ((ex.sets as any[]).length ? (ex.sets as any[]) : [defaultSet]).map(
+							(s: any) => ({
+								...s,
+								completed: false,
+								...(timeBased && s.durationSeconds == null
+									? { durationSeconds: exercise.defaultDurationSeconds || 45 }
+									: {})
+							})
+						);
 					} else {
-						sets = [
-							{
-								reps: exercise.defaultReps || 10,
-								weight: 0,
-								rest: exercise.defaultRestSeconds || 60,
-								completed: false
-							}
-						];
+						sets = [{ ...defaultSet, completed: false }];
 					}
 					return { exercise, exerciseType: exercise.exerciseType, sets };
 				} else if (exercise.exerciseType === 'cardio') {
@@ -122,11 +119,13 @@
 		if (selectedExercises.some((e) => e.exercise.id === exercise.id)) return;
 
 		if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
+			const timeBased = isTimeBased(exercise);
 			const sets = Array.from({ length: exercise.defaultSets || 3 }, () => ({
-				reps: exercise.defaultReps || 10,
+				reps: timeBased ? 0 : (exercise.defaultReps || 10),
 				weight: 0,
 				rest: exercise.defaultRestSeconds || 60,
-				completed: false
+				completed: false,
+				...(timeBased ? { durationSeconds: exercise.defaultDurationSeconds || 45 } : {})
 			}));
 			selectedExercises = [...selectedExercises, { exercise, exerciseType: exercise.exerciseType, sets }];
 		} else if (exercise.exerciseType === 'cardio') {
@@ -180,7 +179,7 @@
 	function updateSet(
 		exerciseIndex: number,
 		setIndex: number,
-		field: 'reps' | 'weight' | 'rest',
+		field: 'reps' | 'weight' | 'rest' | 'durationSeconds',
 		value: number
 	) {
 		selectedExercises = selectedExercises.map((ex, exIdx) => {
@@ -232,6 +231,7 @@
 		const ex = selectedExercises[exerciseIndex];
 		if (ex.exerciseType !== 'weights' && ex.exerciseType !== 'bodyweight') return;
 		const lastSet = ex.sets[ex.sets.length - 1];
+		const timeBased = isTimeBased(ex.exercise);
 		selectedExercises = selectedExercises.map((exercise, idx) => {
 			if (idx === exerciseIndex && (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight')) {
 				return {
@@ -239,10 +239,13 @@
 					sets: [
 						...exercise.sets,
 						{
-							reps: lastSet?.reps || exercise.exercise.defaultReps || 10,
+							reps: timeBased ? 0 : (lastSet?.reps || exercise.exercise.defaultReps || 10),
 							weight: lastSet?.weight || 0,
 							rest: exercise.exercise.defaultRestSeconds || 60,
-							completed: false
+							completed: false,
+							...(timeBased
+								? { durationSeconds: lastSet?.durationSeconds || exercise.exercise.defaultDurationSeconds || 45 }
+								: {})
 						}
 					]
 				};
@@ -264,7 +267,12 @@
 				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
 					return {
 						...base,
-						sets: ex.sets.map((set) => ({ reps: set.reps, weight: set.weight, rest: set.rest }))
+						sets: ex.sets.map((set) => ({
+						reps: set.reps,
+						weight: set.weight,
+						rest: set.rest,
+						...(set.durationSeconds != null ? { durationSeconds: set.durationSeconds } : {})
+					}))
 					};
 				} else if (ex.exerciseType === 'cardio') {
 					return {
@@ -364,7 +372,7 @@
 					{#if showRecentExercises}
 						<div class="flex flex-wrap gap-2">
 							{#each recentExercises as recent}
-								{@const exercise = getExerciseById(recent.exerciseId) || customExercises.find((ce) => ce.id === recent.exerciseId)}
+								{@const exercise = findExercise(recent.exerciseId, customExercises)}
 								{#if exercise && !selectedExercises.some((e) => e.exercise.id === exercise.id)}
 									<button
 										onclick={() => addExercise(exercise)}
@@ -460,14 +468,25 @@
 												<X class="w-4 h-4 text-[var(--color-danger)]" />
 											</button>
 											<span class="text-sm text-[var(--color-muted)] w-14 flex-shrink-0 text-left">Set {setIndex + 1}</span>
-											<input
-												type="number"
-												value={set.reps}
-												oninput={(e) => updateSet(exerciseIndex, setIndex, 'reps', parseInt((e.target as HTMLInputElement).value) || 0)}
-												class="flex-1 min-w-0 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
-												placeholder="Reps"
-											/>
-											<span class="text-[var(--color-muted)] flex-shrink-0">×</span>
+											{#if isTimeBased(ex.exercise)}
+												<input
+													type="number"
+													value={set.durationSeconds || 0}
+													oninput={(e) => updateSet(exerciseIndex, setIndex, 'durationSeconds', parseInt((e.target as HTMLInputElement).value) || 0)}
+													class="flex-1 min-w-0 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
+													placeholder="Secs"
+												/>
+												<span class="text-[var(--color-muted)] text-sm flex-shrink-0">sec</span>
+											{:else}
+												<input
+													type="number"
+													value={set.reps}
+													oninput={(e) => updateSet(exerciseIndex, setIndex, 'reps', parseInt((e.target as HTMLInputElement).value) || 0)}
+													class="flex-1 min-w-0 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
+													placeholder="Reps"
+												/>
+												<span class="text-[var(--color-muted)] flex-shrink-0">×</span>
+											{/if}
 											<input
 												type="number"
 												value={convertWeight(set.weight, currentUnit)}

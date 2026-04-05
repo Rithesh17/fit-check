@@ -13,19 +13,32 @@ export interface Exercise {
 	primaryMuscleGroup: string; // Primary muscle group (e.g., 'chest', 'back', 'shoulders')
 	muscleGroups: string[]; // Only for weights and bodyweight - includes primary + secondary
 	equipment: string;
+	trackingMode?: 'reps' | 'time'; // For weights/bodyweight: 'reps' (default) or 'time' (timer-based)
 	// For weights and bodyweight
 	defaultSets?: number;
 	defaultReps?: number;
 	defaultRestSeconds?: number;
+	defaultDurationSeconds?: number; // For time-based weights/bodyweight sets, and for stretches
 	// For cardio
 	defaultDurationMinutes?: number;
 	defaultCalories?: number;
 	// For stretches
-	defaultDurationSeconds?: number;
 	defaultRepsStretches?: number;
 	instructions: string;
 	imageUrl?: string;
 	videoUrl?: string; // YouTube video URL for exercise demonstration
+}
+
+/**
+ * Returns true if this exercise tracks duration instead of reps.
+ * Works for both static exercises (trackingMode field) and custom exercises (inferred from defaultDurationSeconds).
+ */
+export function isTimeBased(exercise: Exercise): boolean {
+	if (exercise.exerciseType === 'cardio' || exercise.exerciseType === 'stretches') return false;
+	if (exercise.trackingMode === 'time') return true;
+	// Infer for custom exercises: defaultDurationSeconds set and defaultReps absent
+	return (exercise.defaultDurationSeconds != null && exercise.defaultDurationSeconds > 0 &&
+		(exercise.defaultReps == null || exercise.defaultReps === 0));
 }
 
 export const exercises: Exercise[] = [
@@ -707,8 +720,9 @@ export const exercises: Exercise[] = [
 		primaryMuscleGroup: 'core',
 		muscleGroups: ['core'],
 		equipment: 'Bodyweight',
+		trackingMode: 'time',
 		defaultSets: 3,
-		defaultReps: 1,
+		defaultDurationSeconds: 60,
 		defaultRestSeconds: 60,
 		videoUrl: 'https://youtube.com/shorts/v25dawSzRTM?si=zzYeryOCloFL9xAb',
 		instructions: 'Hold 60 seconds, keep body straight'
@@ -837,6 +851,138 @@ export const exercises: Exercise[] = [
 		instructions: 'Pull cable diagonally across body, each side'
 	},
 
+	// MORNING CORE — timed circuit (45s work, ~37s rest)
+	{
+		id: 'butterfly-crunches',
+		name: 'Butterfly Crunches',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'Soles of feet together, crunch up; hip flexors bypassed — 45 seconds'
+	},
+	{
+		id: 'reverse-crunch-leg-opener',
+		name: 'Reverse Crunch + Leg Opener',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'Curl hips off floor, open legs at top, lower with control — 45 seconds'
+	},
+	{
+		id: 'leg-lowers',
+		name: 'Leg Lowers',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'Both legs start at 90°, lower slowly to hover above floor, back flat — 45 seconds'
+	},
+	{
+		id: 'cross-crunches',
+		name: 'Cross Crunches',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core', 'obliques'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'Rotate shoulder to opposite knee, alternate sides — 45 seconds'
+	},
+	{
+		id: 'heel-taps',
+		name: 'Heel Taps',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core', 'obliques'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'Knees bent, slight crunch, reach sideways to tap each heel alternately — 45 seconds'
+	},
+	{
+		id: 'spider-crunches',
+		name: 'Spider Crunches',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core', 'obliques'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'High plank, drive knee laterally to same-side elbow, alternate — 45 seconds'
+	},
+	{
+		id: 'single-leg-extensions',
+		name: 'Single Leg Extensions',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'Supine, one leg in tabletop, extend other leg to hover near floor, alternate — 45 seconds'
+	},
+	{
+		id: 'plank-knee-tucks',
+		name: 'Plank Knee Tucks',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core', 'shoulders'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'Plank position, drive alternating knees toward chest — 45 seconds'
+	},
+	{
+		id: 'side-plank',
+		name: 'Side Plank',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core', 'obliques'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'Hold each side — 45 seconds per side'
+	},
+	{
+		id: 'bird-dog',
+		name: 'Bird Dog',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'core',
+		muscleGroups: ['core', 'back'],
+		equipment: 'Bodyweight',
+		trackingMode: 'time',
+		defaultSets: 1,
+		defaultDurationSeconds: 45,
+		defaultRestSeconds: 30,
+		instructions: 'On all fours, extend opposite arm and leg simultaneously, alternate slowly — 45 seconds'
+	},
+
 	// FOREARMS
 	{
 		id: 'wrist-curl',
@@ -869,8 +1015,9 @@ export const exercises: Exercise[] = [
 		primaryMuscleGroup: 'forearms',
 		muscleGroups: ['forearms', 'core', 'traps'],
 		equipment: 'Dumbbell',
+		trackingMode: 'time',
 		defaultSets: 3,
-		defaultReps: 1,
+		defaultDurationSeconds: 60,
 		defaultRestSeconds: 120,
 		instructions: 'Walk 50 feet, grip strength focus'
 	},

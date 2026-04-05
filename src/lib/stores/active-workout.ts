@@ -8,6 +8,8 @@
 
 import { writable } from 'svelte/store';
 
+const SCHEMA_VERSION = 2;
+
 export type ActiveWorkoutSet = {
 	reps: number;
 	weight: number;
@@ -20,11 +22,13 @@ export type ActiveWorkoutSet = {
 export type ActiveWorkoutExercise =
 	| {
 			exerciseId: string;
+			exerciseName?: string;
 			exerciseType: 'weights' | 'bodyweight';
 			sets: ActiveWorkoutSet[];
 	  }
 	| {
 			exerciseId: string;
+			exerciseName?: string;
 			exerciseType: 'cardio';
 			durationMinutes: number;
 			calories: number;
@@ -32,6 +36,7 @@ export type ActiveWorkoutExercise =
 	  }
 	| {
 			exerciseId: string;
+			exerciseName?: string;
 			exerciseType: 'stretches';
 			durationSeconds: number;
 			reps: number;
@@ -49,12 +54,21 @@ export type ActiveWorkoutPayload = {
 
 const STORAGE_KEY = 'activeWorkout';
 
+type StoredPayload = ActiveWorkoutPayload & { schemaVersion: number };
+
 function restoreFromStorage(): ActiveWorkoutPayload | null {
 	if (typeof window === 'undefined') return null;
 	try {
 		const stored = sessionStorage.getItem(STORAGE_KEY);
-		return stored ? (JSON.parse(stored) as ActiveWorkoutPayload) : null;
+		if (!stored) return null;
+		const parsed = JSON.parse(stored) as StoredPayload;
+		if (parsed.schemaVersion !== SCHEMA_VERSION) {
+			sessionStorage.removeItem(STORAGE_KEY);
+			return null;
+		}
+		return parsed;
 	} catch {
+		sessionStorage.removeItem(STORAGE_KEY);
 		return null;
 	}
 }
@@ -66,7 +80,8 @@ function createActiveWorkoutStore() {
 		subscribe,
 		start(payload: ActiveWorkoutPayload) {
 			if (typeof window !== 'undefined') {
-				sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+				const toStore: StoredPayload = { ...payload, schemaVersion: SCHEMA_VERSION };
+				sessionStorage.setItem(STORAGE_KEY, JSON.stringify(toStore));
 			}
 			set(payload);
 		},

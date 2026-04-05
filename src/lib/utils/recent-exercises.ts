@@ -35,7 +35,7 @@ export async function getRecentExercises(limit: number = 10): Promise<RecentExer
 		// Get exercise usage
 		const { data: workoutExercises, error: exercisesError } = await supabase
 			.from('workout_exercises')
-			.select('exercise_id')
+			.select('exercise_id, workout_id')
 			.in('workout_id', workoutIds);
 
 		if (exercisesError) throw exercisesError;

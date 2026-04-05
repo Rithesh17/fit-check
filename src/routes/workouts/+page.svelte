@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { exercises, getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
+	import { exercises, type Exercise, type ExerciseType } from '$lib/data/exercises';
 	import { Search, X, Plus, ChevronLeft, ChevronRight, Activity, BookOpen, Play, Calendar, Clock, Pencil, Trash2 } from 'lucide-svelte';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import ExerciseEditor from '$lib/components/ExerciseEditor.svelte';
 	import { goto } from '$app/navigation';
-	import { loadCustomExercises } from '$lib/services/exercises';
+	import { loadCustomExercises, findExercise } from '$lib/services/exercises';
 	import { loadTemplates, deleteTemplate } from '$lib/services/templates';
 	import { activeWorkout, type ActiveWorkoutExercise } from '$lib/stores/active-workout';
 	import { toast } from '$lib/stores/toast';
@@ -150,9 +150,9 @@
 		const exs = templateExercisesMap[templateId] || [];
 		const exercisesPayload = exs
 			.map((ex) => {
-				const exercise = getExerciseById(ex.exercise_id) || customExercises.find(ce => ce.id === ex.exercise_id);
+				const exercise = findExercise(ex.exercise_id, customExercises);
 				if (!exercise) return null;
-				
+
 				// Handle different exercise types
 				if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
 					// Check if sets is an array (old format) or object with type
@@ -165,11 +165,12 @@
 						// Fallback to defaults
 						sets = [{ reps: exercise.defaultReps || 10, weight: 0, rest: exercise.defaultRestSeconds || 60, completed: false }];
 					}
-					return { exerciseId: exercise.id, exerciseType: exercise.exerciseType, sets };
+					return { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: exercise.exerciseType, sets };
 				} else if (exercise.exerciseType === 'cardio') {
 					const rawSets = ex.sets as any;
 					return {
 						exerciseId: exercise.id,
+						exerciseName: exercise.name,
 						exerciseType: 'cardio' as const,
 						durationMinutes: rawSets?.durationMinutes || exercise.defaultDurationMinutes || 30,
 						calories: rawSets?.calories || exercise.defaultCalories || 300,
@@ -179,6 +180,7 @@
 					const rawSets = ex.sets as any;
 					return {
 						exerciseId: exercise.id,
+						exerciseName: exercise.name,
 						exerciseType: 'stretches' as const,
 						durationSeconds: rawSets?.durationSeconds || exercise.defaultDurationSeconds || 60,
 						reps: rawSets?.reps || exercise.defaultRepsStretches || 10,

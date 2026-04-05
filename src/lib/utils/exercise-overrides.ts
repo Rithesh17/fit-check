@@ -39,7 +39,7 @@ export async function getExerciseOverride(exerciseId: string): Promise<ExerciseO
 			return null;
 		}
 
-		return data || null;
+		return (data as ExerciseOverride | null) || null;
 	} catch (error) {
 		console.error('Error fetching exercise override:', error);
 		return null;
@@ -121,13 +121,13 @@ export async function saveExerciseOverride(
 			// Update existing override
 			const { data, error } = await supabase
 				.from('user_exercise_overrides')
-				.update(override as any as never)
+				.update(override as any)
 				.eq('exercise_id', exerciseId)
 				.select()
 				.single();
 
 			if (error) throw error;
-			return data;
+			return data as ExerciseOverride;
 		} else {
 			// Create new override
 			const { data, error } = await supabase
@@ -140,7 +140,7 @@ export async function saveExerciseOverride(
 				.single();
 
 			if (error) throw error;
-			return data;
+			return data as ExerciseOverride;
 		}
 	} catch (error) {
 		console.error('Error saving exercise override:', error);
@@ -170,6 +170,14 @@ export async function deleteExerciseOverride(exerciseId: string): Promise<boolea
  * Check if exercise has an override
  */
 export async function hasExerciseOverride(exerciseId: string): Promise<boolean> {
-	const override = await getExerciseOverride(exerciseId);
-	return override !== null;
+	try {
+		const { count, error } = await supabase
+			.from('user_exercise_overrides')
+			.select('id', { count: 'exact', head: true })
+			.eq('exercise_id', exerciseId);
+		if (error) return false;
+		return (count ?? 0) > 0;
+	} catch {
+		return false;
+	}
 }

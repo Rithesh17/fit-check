@@ -2,25 +2,38 @@
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { goto } from '$app/navigation';
-	import { getExerciseById, exercises as allExercises, type Exercise } from '$lib/data/exercises';
+	import { isTimeBased, exercises as allExercises, type Exercise } from '$lib/data/exercises';
 	import { saveWorkout, getLastSetsForExercise } from '$lib/services/workouts';
 	import { toast } from '$lib/stores/toast';
 	import RestTimer from '$lib/components/RestTimer.svelte';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
+	import ExerciseEditor from '$lib/components/ExerciseEditor.svelte';
 	import { Check, X, Play, Pause, SkipForward, Info, Clock, Edit2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, ArrowUp, ArrowDown, Search } from 'lucide-svelte';
 	import { unitPreference } from '$lib/stores/unit-preference';
 	import { activeWorkout } from '$lib/stores/active-workout';
-	import { loadCustomExercises, type CustomExercise } from '$lib/services/exercises';
+	import { loadCustomExercises, findExercise, type CustomExercise } from '$lib/services/exercises';
+	import type { ActiveWorkoutExercise } from '$lib/stores/active-workout';
 	import type { WorkoutExercise, WorkoutSet } from '$lib/types/workout';
 	import { convertWeight, formatWeight, getWeightUnitLabel, lbsToKg, kgToLbs } from '$lib/utils/weight-conversion';
 
-	// Exercises that use time instead of reps/weight
-	const TIME_BASED_EXERCISES = ['plank', 'farmer-walk', 'dead-bug', 'wall-sit', 'hollow-hold', 'ab-wheel'];
-
 	function isTimeBasedExercise(exercise: Exercise | null): boolean {
 		if (!exercise) return false;
-		return TIME_BASED_EXERCISES.includes(exercise.id) || 
-		       (exercise.defaultReps === 1 && exercise.instructions.toLowerCase().includes('hold'));
+		return isTimeBased(exercise);
+	}
+
+	function createExerciseStub(ex: ActiveWorkoutExercise): Exercise {
+		return {
+			id: ex.exerciseId,
+			name: ex.exerciseName || ex.exerciseId,
+			exerciseType: ex.exerciseType === 'cardio' ? 'cardio' : ex.exerciseType === 'stretches' ? 'stretches' : 'weights',
+			primaryMuscleGroup: 'other',
+			muscleGroups: [],
+			equipment: 'Unknown',
+			defaultSets: 3,
+			defaultReps: 10,
+			defaultRestSeconds: 60,
+			instructions: ''
+		};
 	}
 
 	let workoutName = $state('');
@@ -43,6 +56,9 @@
 	let showExerciseDetail = $state(false);
 	let nextDetailExercise = $state<Exercise | null>(null);
 	let showExercisePicker = $state(false);
+	let showExerciseEditor = $state(false);
+	/** When true, closing the editor (cancel) reopens the add-exercise picker. Cleared after a successful save. */
+	let editorReturnToPickerOnClose = $state(false);
 	let exercisePickerSearch = $state('');
 	// Map of exerciseId -> last logged set data (for autofill)
 	let previousSetData = $state<Record<string, Array<{ reps: number; weight: number }>>>({});
@@ -214,8 +230,7 @@
 				mood = payload.mood || '';
 				restDurationBetweenExercises = payload.restDurationBetweenExercises ?? 90;
 				selectedExercises = payload.exercises.map((ex): WorkoutExercise | null => {
-					const exercise = getExerciseById(ex.exerciseId) || customExercises.find(ce => ce.id === ex.exerciseId);
-					if (!exercise) return null;
+					const exercise = findExercise(ex.exerciseId, customExercises) || createExerciseStub(ex);
 					
 					if (ex.exerciseType === 'cardio') {
 						return {
@@ -235,12 +250,12 @@
 						};
 					} else {
 						// Weights or bodyweight
-						const isTimeBased = isTimeBasedExercise(exercise);
+						const timeBased = isTimeBasedExercise(exercise);
 						const sets = (ex.sets || []).map((set: any) => ({
 							...set,
 							notes: set.notes || '',
 							// Initialize durationSeconds for time-based exercises if not present
-							durationSeconds: isTimeBased ? (set.durationSeconds || 0) : undefined
+							durationSeconds: timeBased ? (set.durationSeconds ?? exercise.defaultDurationSeconds ?? 45) : undefined
 						}));
 						const weightsEx: WorkoutExercise = {
 							exercise,
@@ -699,7 +714,8 @@
 							weight: set.weight,
 							rest: set.rest,
 							completed: set.completed,
-							notes: set.notes || null
+							notes: set.notes || null,
+							...(set.durationSeconds != null ? { durationSeconds: set.durationSeconds } : {})
 						}))
 					};
 				} else if (ex.exerciseType === 'cardio') {
@@ -883,8 +899,34 @@
 
 	// ─── Add / Remove / Reorder exercises mid-workout ───────────────────────
 
+	function openCreateExerciseFromPicker() {
+		editorReturnToPickerOnClose = true;
+		showExercisePicker = false;
+		showExerciseEditor = true;
+	}
+
+	function handleExerciseEditorClose() {
+		showExerciseEditor = false;
+		if (editorReturnToPickerOnClose) {
+			showExercisePicker = true;
+		}
+		editorReturnToPickerOnClose = false;
+	}
+
+	async function onCustomExerciseCreated() {
+		editorReturnToPickerOnClose = false;
+		const beforeIds = new Set(customExercises.map((e) => e.id));
+		customExercises = await loadCustomExercises();
+		const created = customExercises.find((e) => !beforeIds.has(e.id));
+		if (created) {
+			addExerciseMidWorkout(created);
+		} else {
+			toast.error('Exercise saved. Open Add exercise to select it.');
+		}
+	}
+
 	function addExerciseMidWorkout(exercise: Exercise) {
-		const isTimeBased = isTimeBasedExercise(exercise);
+		const timeBased = isTimeBasedExercise(exercise);
 		let newEx: WorkoutExercise;
 
 		if (exercise.exerciseType === 'cardio') {
@@ -905,12 +947,12 @@
 			};
 		} else {
 			const defaultSet = {
-				reps: exercise.defaultReps ?? 10,
+				reps: timeBased ? 0 : (exercise.defaultReps ?? 10),
 				weight: 0,
 				rest: exercise.defaultRestSeconds ?? 90,
 				completed: false,
 				notes: '',
-				...(isTimeBased ? { durationSeconds: 0 } : {})
+				...(timeBased ? { durationSeconds: exercise.defaultDurationSeconds ?? 45 } : {})
 			};
 			// Match set count to existing exercises (use maxRounds)
 			const setCount = Math.max(maxRounds, 1);
@@ -1387,6 +1429,25 @@
 									placeholder="Enter seconds"
 								/>
 							</div>
+
+							<!-- Weight Input for timer-based exercises (e.g. farmer's walk, weighted planks) -->
+							<div>
+								<label for="weight-input-timed" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Weight ({getWeightUnitLabel(currentUnit)}) <span class="font-normal text-[var(--color-muted)]">— optional</span>
+								</label>
+								<input
+									id="weight-input-timed"
+									type="number"
+									step="0.5"
+									value={convertWeight(currentSet.weight, currentUnit)}
+									oninput={(e) => {
+										const inputValue = parseFloat((e.target as HTMLInputElement).value) || 0;
+										const weightKg = currentUnit === 'lbs' ? lbsToKg(inputValue) : inputValue;
+										updateSetValue('weight', weightKg);
+									}}
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] text-center text-2xl font-bold focus:outline-none focus:border-[var(--color-primary)]"
+								/>
+							</div>
 						{:else}
 							<!-- Reps Input -->
 							<div>
@@ -1764,16 +1825,27 @@
 			class="mx-auto flex h-[85vh] max-h-[100dvh] w-full max-w-md min-h-0 flex-col overflow-hidden rounded-t-2xl bg-[var(--color-background)] shadow-2xl sm:h-[40rem]"
 			onclick={(e) => e.stopPropagation()}
 		>
-			<div class="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-				<h3 class="font-bold text-[var(--color-foreground)]">Add Exercise</h3>
-				<button
-					type="button"
-					onclick={() => (showExercisePicker = false)}
-					class="text-[var(--color-muted)] hover:text-[var(--color-foreground)] transition-colors"
-					aria-label="Close"
-				>
-					<X class="w-5 h-5" />
-				</button>
+			<div class="flex items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-3">
+				<h3 class="min-w-0 font-bold text-[var(--color-foreground)]">Add Exercise</h3>
+				<div class="flex shrink-0 items-center gap-1">
+					<button
+						type="button"
+						onclick={openCreateExerciseFromPicker}
+						class="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-[var(--color-primary)] hover:bg-[var(--color-card)] transition-colors"
+						title="Create new exercise"
+					>
+						<Plus class="h-4 w-4" strokeWidth={2} />
+						<span class="hidden sm:inline">New</span>
+					</button>
+					<button
+						type="button"
+						onclick={() => (showExercisePicker = false)}
+						class="text-[var(--color-muted)] hover:text-[var(--color-foreground)] transition-colors p-1"
+						aria-label="Close"
+					>
+						<X class="w-5 h-5" />
+					</button>
+				</div>
 			</div>
 			<div class="border-b border-[var(--color-border)] px-4 py-3">
 				<div class="relative">
@@ -1808,11 +1880,29 @@
 					</button>
 				{/each}
 				{#if pickerExercises.length === 0}
-					<p class="py-8 text-center text-sm text-[var(--color-muted)]">No exercises found</p>
+					<div class="flex flex-col items-center gap-3 py-8 px-4">
+						<p class="text-center text-sm text-[var(--color-muted)]">No exercises found</p>
+						<button
+							type="button"
+							onclick={openCreateExerciseFromPicker}
+							class="rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+						>
+							Create new exercise
+						</button>
+					</div>
 				{/if}
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if showExerciseEditor}
+	<ExerciseEditor
+		exercise={null}
+		isCustom={true}
+		onClose={handleExerciseEditorClose}
+		onSave={onCustomExerciseCreated}
+	/>
 {/if}
 <style>
 	.fitness-card {

@@ -3,12 +3,13 @@
  * Based on muscle group training plan
  */
 
-import { getExerciseById, type Exercise } from './exercises';
+import { getExerciseById, isTimeBased, type Exercise } from './exercises';
 
 export interface WorkoutTemplateExercise {
 	exerciseId: string;
 	sets: number;
-	reps: number | string; // Can be "max reps" or number range like "6-8"
+	reps?: number | string; // Can be "max reps" or number range like "6-8". Not used for time-based exercises.
+	durationSeconds?: number; // For time-based exercises (trackingMode: 'time')
 	restSeconds: number;
 	notes?: string;
 }
@@ -73,54 +74,82 @@ export const workoutTemplates: WorkoutTemplate[] = [
 			}
 		]
 	},
-	// CORE — six moves: flexion, anti-extension, rotation
+	// CORE — balanced daily circuit: upper + lower RA, obliques, TVA, posterior, lateral
 	{
 		id: 'core',
 		name: 'Core',
-		description: 'Six lifts: hanging and floor flexion, anti-extension, rotation and obliques',
+		description: 'Balanced 10-move circuit: upper/lower RA, obliques (rotation + lateral), TVA, posterior core, lateral stability',
 		muscleGroups: ['core'],
 		exercises: [
 			{
-				exerciseId: 'hanging-knee-raises',
-				sets: 3,
-				reps: '10-15',
-				restSeconds: 90,
-				notes: 'Captain’s chair if hanging fatigues grip'
+				exerciseId: 'butterfly-crunches',
+				sets: 1,
+				durationSeconds: 45,
+				restSeconds: 30,
+				notes: 'Upper RA, no hip flexor cheating'
 			},
 			{
-				exerciseId: 'plank',
-				sets: 3,
-				reps: 1,
-				restSeconds: 60,
-				notes: 'Hold 45–60 seconds'
+				exerciseId: 'reverse-crunch-leg-opener',
+				sets: 1,
+				durationSeconds: 45,
+				restSeconds: 30,
+				notes: 'Lower RA'
 			},
 			{
-				exerciseId: 'ab-wheel',
-				sets: 3,
-				reps: '8-12',
-				restSeconds: 90,
-				notes: 'Short range if needed; ribs down'
-			},
-			{
-				exerciseId: 'cable-woodchoppers',
-				sets: 3,
-				reps: 10,
-				restSeconds: 60,
-				notes: 'High to low or low to high; each side'
-			},
-			{
-				exerciseId: 'russian-twists',
-				sets: 3,
-				reps: 20,
+				exerciseId: 'leg-lowers',
+				sets: 1,
+				durationSeconds: 45,
 				restSeconds: 45,
-				notes: 'Feet optional off floor for more demand'
+				notes: 'Lower RA + highest TVA anti-extension demand'
 			},
 			{
-				exerciseId: 'leg-raises',
-				sets: 3,
-				reps: 15,
+				exerciseId: 'cross-crunches',
+				sets: 1,
+				durationSeconds: 45,
+				restSeconds: 30,
+				notes: 'Obliques (rotation)'
+			},
+			{
+				exerciseId: 'heel-taps',
+				sets: 1,
+				durationSeconds: 45,
+				restSeconds: 45,
+				notes: 'Obliques (lateral flexion)'
+			},
+			{
+				exerciseId: 'spider-crunches',
+				sets: 1,
+				durationSeconds: 45,
 				restSeconds: 60,
-				notes: 'Floor or bench; control the negative'
+				notes: 'Highest oblique activation (ACE EMG)'
+			},
+			{
+				exerciseId: 'single-leg-extensions',
+				sets: 1,
+				durationSeconds: 45,
+				restSeconds: 30,
+				notes: 'TVA isolation (deep stabiliser)'
+			},
+			{
+				exerciseId: 'plank-knee-tucks',
+				sets: 1,
+				durationSeconds: 45,
+				restSeconds: 30,
+				notes: 'TVA + integrated stability'
+			},
+			{
+				exerciseId: 'side-plank',
+				sets: 1,
+				durationSeconds: 45,
+				restSeconds: 30,
+				notes: 'Each side — QL + lateral core'
+			},
+			{
+				exerciseId: 'bird-dog',
+				sets: 1,
+				durationSeconds: 45,
+				restSeconds: 30,
+				notes: 'Posterior core, erectors, multifidus'
 			}
 		]
 	},
@@ -237,7 +266,8 @@ export function getTemplateExercises(
 ): Array<{
 	exercise: Exercise;
 	sets: number;
-	reps: number | string;
+	reps?: number | string;
+	durationSeconds?: number;
 	restSeconds: number;
 	notes?: string;
 }> {
@@ -249,6 +279,7 @@ export function getTemplateExercises(
 				exercise,
 				sets: templateEx.sets,
 				reps: templateEx.reps,
+				durationSeconds: templateEx.durationSeconds,
 				restSeconds: templateEx.restSeconds,
 				notes: templateEx.notes
 			};
@@ -272,7 +303,7 @@ export function templateToWorkoutExercises(
 	reps?: number;
 	completed?: boolean;
 }> {
-	return getTemplateExercises(template, customExercises).map(({ exercise, sets, reps, restSeconds }) => {
+	return getTemplateExercises(template, customExercises).map(({ exercise, sets, reps, durationSeconds, restSeconds }) => {
 		if (exercise.exerciseType === 'cardio') {
 			return {
 				exercise,
@@ -289,8 +320,22 @@ export function templateToWorkoutExercises(
 				reps: exercise.defaultRepsStretches || 10,
 				completed: false
 			};
+		} else if (isTimeBased(exercise)) {
+			// Time-based weights/bodyweight
+			const setDuration = durationSeconds ?? exercise.defaultDurationSeconds ?? 45;
+			return {
+				exercise,
+				exerciseType: exercise.exerciseType === 'bodyweight' ? ('bodyweight' as const) : ('weights' as const),
+				sets: Array.from({ length: sets || exercise.defaultSets || 1 }, () => ({
+					reps: 0,
+					weight: 0,
+					rest: restSeconds || exercise.defaultRestSeconds || 30,
+					completed: false,
+					durationSeconds: setDuration
+				}))
+			};
 		} else {
-			// Weights or bodyweight
+			// Weights or bodyweight — reps-based
 			// Parse reps - handle "6-8", "max reps", or number
 			let defaultReps = exercise.defaultReps || 10;
 			if (typeof reps === 'string') {
@@ -302,7 +347,7 @@ export function templateToWorkoutExercises(
 					// Use exercise default for max reps
 					defaultReps = exercise.defaultReps || 10;
 				}
-			} else {
+			} else if (reps != null) {
 				defaultReps = reps || exercise.defaultReps || 10;
 			}
 

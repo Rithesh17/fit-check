@@ -1,7 +1,14 @@
 import { supabase } from '$lib/supabase/client';
-import type { Exercise, ExerciseType } from '$lib/data/exercises';
+import { getExerciseById, type Exercise, type ExerciseType } from '$lib/data/exercises';
 
 export type CustomExercise = Exercise & { isCustom: boolean };
+
+/**
+ * Find an exercise by ID, checking both the static list and custom exercises.
+ */
+export function findExercise(id: string, customExercises: CustomExercise[]): Exercise | undefined {
+	return getExerciseById(id) || customExercises.find((ce) => ce.id === id);
+}
 
 export async function loadCustomExercises(): Promise<CustomExercise[]> {
 	try {

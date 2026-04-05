@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { X, Save, Trash2, RotateCcw } from 'lucide-svelte';
 	import { supabase } from '$lib/supabase/client';
-	import type { Exercise, ExerciseType } from '$lib/data/exercises';
+	import { isTimeBased, type Exercise, type ExerciseType } from '$lib/data/exercises';
 	import {
 		getExerciseOverride,
 		saveExerciseOverride,
@@ -32,6 +32,7 @@
 	let equipment = $state('');
 	let customEquipment = $state('');
 	let showCustomEquipment = $state(false);
+	let trackingMode = $state<'reps' | 'time'>('reps');
 	let defaultSets = $state(3);
 	let defaultReps = $state(10);
 	let defaultRestSeconds = $state(60);
@@ -138,6 +139,7 @@
 					defaultRepsStretches = mergedExercise.defaultRepsStretches ?? 10;
 					instructions = mergedExercise.instructions || '';
 					videoUrl = mergedExercise.videoUrl || '';
+					trackingMode = isTimeBased(mergedExercise) ? 'time' : 'reps';
 					isLoadingOverride = false;
 				} else {
 					// Custom exercise - use as-is
@@ -162,6 +164,7 @@
 					defaultRepsStretches = exercise.defaultRepsStretches ?? 10;
 					instructions = exercise.instructions || '';
 					videoUrl = exercise.videoUrl || '';
+					trackingMode = isTimeBased(exercise) ? 'time' : 'reps';
 				}
 			} else {
 				// New exercise
@@ -172,12 +175,13 @@
 				equipment = '';
 				showCustomEquipment = false;
 				customEquipment = '';
+				trackingMode = 'reps';
 				defaultSets = 3;
 				defaultReps = 10;
 				defaultRestSeconds = 60;
 				defaultDurationMinutes = 30;
 				defaultCalories = 300;
-				defaultDurationSeconds = 60;
+				defaultDurationSeconds = 45;
 				defaultRepsStretches = 10;
 				instructions = '';
 				videoUrl = '';
@@ -263,8 +267,12 @@
 				if (exerciseType === 'weights' || exerciseType === 'bodyweight') {
 					insertData.muscle_groups = muscleGroups;
 					insertData.default_sets = defaultSets;
-					insertData.default_reps = defaultReps;
 					insertData.default_rest_seconds = defaultRestSeconds;
+					if (trackingMode === 'time') {
+						insertData.default_duration_seconds = defaultDurationSeconds;
+					} else {
+						insertData.default_reps = defaultReps;
+					}
 				} else if (exerciseType === 'cardio') {
 					insertData.muscle_groups = []; // Required field, empty for cardio
 					insertData.default_duration_minutes = defaultDurationMinutes;
@@ -303,12 +311,17 @@
 				if (exerciseType === 'weights' || exerciseType === 'bodyweight') {
 					updateData.muscle_groups = muscleGroups;
 					updateData.default_sets = defaultSets;
-					updateData.default_reps = defaultReps;
 					updateData.default_rest_seconds = defaultRestSeconds;
+					if (trackingMode === 'time') {
+						updateData.default_duration_seconds = defaultDurationSeconds;
+						updateData.default_reps = null;
+					} else {
+						updateData.default_reps = defaultReps;
+						updateData.default_duration_seconds = null;
+					}
 					// Clear cardio/stretches fields
 					updateData.default_duration_minutes = null;
 					updateData.default_calories = null;
-					updateData.default_duration_seconds = null;
 					updateData.default_reps_stretches = null;
 				} else if (exerciseType === 'cardio') {
 					updateData.default_duration_minutes = defaultDurationMinutes;
@@ -695,46 +708,110 @@
 					</div>
 				{/if}
 
-				<!-- Defaults Grid - Weights and Bodyweight -->
+				<!-- Tracking Mode + Defaults - Weights and Bodyweight -->
 				{#if exerciseType === 'weights' || exerciseType === 'bodyweight'}
-					<div class="grid grid-cols-3 gap-4">
-						<div>
-							<label for="exercise-sets" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-								Sets
-							</label>
-							<input
-								id="exercise-sets"
-								type="number"
-								bind:value={defaultSets}
-								min="1"
-								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
-							/>
-						</div>
-						<div>
-							<label for="exercise-reps" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-								Reps
-							</label>
-							<input
-								id="exercise-reps"
-								type="number"
-								bind:value={defaultReps}
-								min="1"
-								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
-							/>
-						</div>
-						<div>
-							<label for="exercise-rest" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
-								Rest (sec)
-							</label>
-							<input
-								id="exercise-rest"
-								type="number"
-								bind:value={defaultRestSeconds}
-								min="0"
-								class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
-							/>
+					<!-- Tracking Mode Toggle -->
+					<div>
+						<label class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+							Tracking Mode
+						</label>
+						<div class="flex gap-2">
+							<button
+								type="button"
+								onclick={() => { trackingMode = 'reps'; hasChanges = true; }}
+								class="flex-1 py-2 rounded-lg border font-medium transition-colors {trackingMode === 'reps' ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'bg-[var(--color-card-hover)] border-[var(--color-border)] text-[var(--color-foreground)] hover:border-[var(--color-primary)]'}"
+							>
+								Sets & Reps
+							</button>
+							<button
+								type="button"
+								onclick={() => { trackingMode = 'time'; hasChanges = true; }}
+								class="flex-1 py-2 rounded-lg border font-medium transition-colors {trackingMode === 'time' ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]' : 'bg-[var(--color-card-hover)] border-[var(--color-border)] text-[var(--color-foreground)] hover:border-[var(--color-primary)]'}"
+							>
+								Timer
+							</button>
 						</div>
 					</div>
+
+					{#if trackingMode === 'reps'}
+						<div class="grid grid-cols-3 gap-4">
+							<div>
+								<label for="exercise-sets" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Sets
+								</label>
+								<input
+									id="exercise-sets"
+									type="number"
+									bind:value={defaultSets}
+									min="1"
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+								/>
+							</div>
+							<div>
+								<label for="exercise-reps" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Reps
+								</label>
+								<input
+									id="exercise-reps"
+									type="number"
+									bind:value={defaultReps}
+									min="1"
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+								/>
+							</div>
+							<div>
+								<label for="exercise-rest" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Rest (sec)
+								</label>
+								<input
+									id="exercise-rest"
+									type="number"
+									bind:value={defaultRestSeconds}
+									min="0"
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+								/>
+							</div>
+						</div>
+					{:else}
+						<div class="grid grid-cols-3 gap-4">
+							<div>
+								<label for="exercise-sets-timed" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Sets
+								</label>
+								<input
+									id="exercise-sets-timed"
+									type="number"
+									bind:value={defaultSets}
+									min="1"
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+								/>
+							</div>
+							<div>
+								<label for="exercise-duration-timed" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Duration (sec)
+								</label>
+								<input
+									id="exercise-duration-timed"
+									type="number"
+									bind:value={defaultDurationSeconds}
+									min="1"
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+								/>
+							</div>
+							<div>
+								<label for="exercise-rest-timed" class="block text-sm font-semibold text-[var(--color-muted)] mb-2">
+									Rest (sec)
+								</label>
+								<input
+									id="exercise-rest-timed"
+									type="number"
+									bind:value={defaultRestSeconds}
+									min="0"
+									class="w-full px-4 py-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)]"
+								/>
+							</div>
+						</div>
+					{/if}
 				{/if}
 
 				<!-- Cardio Fields -->
