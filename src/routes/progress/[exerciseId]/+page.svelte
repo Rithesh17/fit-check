@@ -37,8 +37,14 @@
 	const totalVolume = $derived(sessions.reduce((sum, s) => sum + s.volume, 0));
 
 	onMount(async () => {
+		const id = exerciseId;
+		if (!id) {
+			goto('/progress');
+			return;
+		}
+
 		const customExercises = await loadCustomExercises();
-		const found = getExerciseById(exerciseId) || customExercises.find((ce) => ce.id === exerciseId);
+		const found = getExerciseById(id) || customExercises.find((ce) => ce.id === id);
 
 		if (!found) {
 			goto('/progress');
@@ -52,7 +58,7 @@
 			supabase
 				.from('workout_exercises')
 				.select('workout_id, sets')
-				.eq('exercise_id', exerciseId)
+				.eq('exercise_id', id)
 				.order('created_at', { ascending: true })
 		]);
 
@@ -71,7 +77,7 @@
 			})
 			.filter((x): x is { date: string; sets: any } => x !== null);
 
-		progress = calculateExerciseProgress(exerciseId, found.name, workoutData);
+		progress = calculateExerciseProgress(id, found.name, workoutData);
 
 		// Build sessions table — most recent first
 		sessions = [...workoutData].reverse().map((wd) => {

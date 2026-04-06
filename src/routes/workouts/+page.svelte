@@ -71,8 +71,9 @@
 		}
 
 		// Muscle group filter
-		if (selectedMuscleGroup) {
-			result = result.filter((ex) => ex.muscleGroups.includes(selectedMuscleGroup));
+		const muscleFilter = selectedMuscleGroup;
+		if (muscleFilter) {
+			result = result.filter((ex) => ex.muscleGroups.includes(muscleFilter));
 		}
 
 		// Equipment filter
@@ -189,7 +190,7 @@
 				}
 				return null;
 			})
-			.filter((e): e is ActiveWorkoutExercise => e !== null);
+			.filter((e) => e != null) as ActiveWorkoutExercise[];
 		if (exercisesPayload.length === 0) {
 			toast.error('This template has no valid exercises.');
 			return;
@@ -580,10 +581,11 @@
 	/>
 
 	<!-- Exercise Editor Modal -->
-	{#if isEditing}
+	{#if isEditing && exerciseToEdit}
+		{@const editingExercise = exerciseToEdit}
 		<ExerciseEditor
-			exercise={exerciseToEdit}
-			isCustom={exerciseToEdit ? !exercises.find((e) => e.id === exerciseToEdit.id) : true}
+			exercise={editingExercise}
+			isCustom={!exercises.find((e) => e.id === editingExercise.id)}
 			onClose={() => {
 				isEditing = false;
 				exerciseToEdit = null;

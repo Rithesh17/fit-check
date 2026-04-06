@@ -7,4 +7,4 @@
 	<meta name="description" content="Track your workouts, build streaks, and achieve your fitness goals" />
 </svelte:head>
 
-<Dashboard />
+<Dashboard data={{}} />

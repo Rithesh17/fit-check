@@ -267,7 +267,8 @@
 				const completedSets = ex.sets.filter(s => s.completed).length;
 				return { exercise: ex.exercise, exerciseData: ex, exerciseIndex: exIdx, isCurrent, completedSets, totalSets: ex.sets.length };
 			}
-			return { exercise: ex.exercise, exerciseData: ex, exerciseIndex: exIdx, isCurrent, completedSets: ex.completed ? 1 : 0, totalSets: 1 };
+			const done = ex.exerciseType === 'cardio' || ex.exerciseType === 'stretches' ? ex.completed : false;
+			return { exercise: ex.exercise, exerciseData: ex, exerciseIndex: exIdx, isCurrent, completedSets: done ? 1 : 0, totalSets: 1 };
 		});
 	});
 
@@ -768,7 +769,6 @@
 					if (!set.completed) {
 						currentExerciseIndex = exIdx;
 						currentSetIndex = nextSetIndex;
-						if (ex.exerciseType === 'cardio') startCardioTimer();
 						return;
 					}
 				}
@@ -844,12 +844,13 @@
 						...base,
 						sets: { type: 'cardio', durationMinutes: ex.durationMinutes, calories: ex.calories, completed: ex.completed }
 					};
-				} else {
+				} else if (ex.exerciseType === 'stretches') {
 					return {
 						...base,
 						sets: { type: 'stretches', durationSeconds: ex.durationSeconds, reps: ex.reps, completed: ex.completed }
 					};
 				}
+				throw new Error('Unknown exercise type');
 			});
 
 			const workoutId = await saveWorkout(

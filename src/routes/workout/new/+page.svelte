@@ -33,6 +33,16 @@
 	let customExercises = $state<CustomExercise[]>([]);
 
 	const currentUnit = $derived($unitPreference);
+
+	function inputInt(e: Event): number {
+		const el = e.currentTarget as HTMLInputElement;
+		return parseInt(el.value, 10) || 0;
+	}
+
+	function inputFloat(e: Event): number {
+		const el = e.currentTarget as HTMLInputElement;
+		return parseFloat(el.value) || 0;
+	}
 	
 	// Combine default and custom exercises
 	const allExercises = $derived([...exercises, ...customExercises]);
@@ -298,12 +308,13 @@
 						...base,
 						sets: { type: 'cardio', durationMinutes: ex.durationMinutes, calories: ex.calories }
 					};
-				} else {
+				} else if (ex.exerciseType === 'stretches') {
 					return {
 						...base,
 						sets: { type: 'stretches', durationSeconds: ex.durationSeconds, reps: ex.reps }
 					};
 				}
+				throw new Error('Unknown exercise type');
 			});
 
 			await saveTemplate(workoutName || 'Workout', templateExercises);
@@ -572,7 +583,7 @@
 											<input
 												type="number"
 												value={set.durationSeconds || 0}
-												oninput={(e) => updateSet(exerciseIndex, setIndex, 'durationSeconds', parseInt(e.target.value) || 0)}
+												oninput={(e) => updateSet(exerciseIndex, setIndex, 'durationSeconds', inputInt(e))}
 												class="flex-1 min-w-0 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
 												placeholder="Secs"
 											/>
@@ -581,7 +592,7 @@
 											<input
 												type="number"
 												value={set.reps}
-												oninput={(e) => updateSet(exerciseIndex, setIndex, 'reps', parseInt(e.target.value) || 0)}
+												oninput={(e) => updateSet(exerciseIndex, setIndex, 'reps', inputInt(e))}
 												class="flex-1 min-w-0 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
 												placeholder="Reps"
 											/>
@@ -592,7 +603,7 @@
 											value={convertWeight(set.weight, currentUnit)}
 											step={currentUnit === 'lbs' ? '0.5' : '0.5'}
 											oninput={(e) => {
-												const inputValue = parseFloat(e.target.value) || 0;
+												const inputValue = inputFloat(e);
 												const weightKg = currentUnit === 'lbs' ? lbsToKg(inputValue) : inputValue;
 												updateSet(exerciseIndex, setIndex, 'weight', weightKg);
 											}}
@@ -618,7 +629,7 @@
 										<input
 											type="number"
 											value={ex.durationMinutes}
-											oninput={(e) => updateCardioData(exerciseIndex, 'durationMinutes', parseInt(e.target.value) || 0)}
+											oninput={(e) => updateCardioData(exerciseIndex, 'durationMinutes', inputInt(e))}
 											class="flex-1 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
 											placeholder="Minutes"
 										/>
@@ -631,7 +642,7 @@
 										<input
 											type="number"
 											value={ex.calories}
-											oninput={(e) => updateCardioData(exerciseIndex, 'calories', parseInt(e.target.value) || 0)}
+											oninput={(e) => updateCardioData(exerciseIndex, 'calories', inputInt(e))}
 											class="flex-1 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
 											placeholder="Calories"
 										/>
@@ -648,7 +659,7 @@
 										<input
 											type="number"
 											value={ex.durationSeconds}
-											oninput={(e) => updateStretchesData(exerciseIndex, 'durationSeconds', parseInt(e.target.value) || 0)}
+											oninput={(e) => updateStretchesData(exerciseIndex, 'durationSeconds', inputInt(e))}
 											class="flex-1 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
 											placeholder="Seconds"
 										/>
@@ -661,7 +672,7 @@
 										<input
 											type="number"
 											value={ex.reps}
-											oninput={(e) => updateStretchesData(exerciseIndex, 'reps', parseInt(e.target.value) || 0)}
+											oninput={(e) => updateStretchesData(exerciseIndex, 'reps', inputInt(e))}
 											class="flex-1 px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-[var(--color-foreground)] text-center focus:outline-none focus:border-[var(--color-primary)]"
 											placeholder="Reps"
 										/>

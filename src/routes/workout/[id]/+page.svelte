@@ -60,7 +60,7 @@
 				.single();
 
 			if (workoutError) throw workoutError;
-			workout = workoutData;
+			workout = workoutData as Workout;
 
 			// Fetch workout exercises
 			const { data: exercisesData, error: exercisesError } = await supabase

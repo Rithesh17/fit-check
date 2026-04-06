@@ -11,7 +11,7 @@
 	import { loadCustomExercises, findExercise } from '$lib/services/exercises';
 	import { activeWorkout, type ActiveWorkoutExercise } from '$lib/stores/active-workout';
 
-	let { data } = $props();
+	let { data: _pageData }: { data?: object } = $props();
 
 	let streakData = $state<StreakData>({
 		currentStreak: 0,
@@ -105,7 +105,7 @@
 				}
 				return null;
 			})
-			.filter((e: any): e is ActiveWorkoutExercise => e !== null);
+			.filter((e) => e != null) as ActiveWorkoutExercise[];
 		if (exercisesPayload.length === 0) return;
 		activeWorkout.start({ name: scheduledTemplate.name || 'Workout', notes: '', energyLevel: null, mood: '', restDurationBetweenExercises: 90, exercises: exercisesPayload });
 		goto('/workout/active');

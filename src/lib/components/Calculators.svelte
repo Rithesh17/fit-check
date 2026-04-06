@@ -14,7 +14,7 @@
 	// 1RM Calculator
 	let oneRMWeight = $state('');
 	let oneRMReps = $state('');
-	let oneRMResult = $derived(() => {
+	let oneRMResult = $derived.by(() => {
 		const weight = parseFloat(oneRMWeight);
 		const reps = parseInt(oneRMReps);
 		if (weight > 0 && reps > 0) {
@@ -26,7 +26,7 @@
 	// Plate Calculator
 	let plateTargetWeight = $state('');
 	let plateBarWeight = $state('20');
-	let plateResult = $derived<PlateCalculation | null>(() => {
+	let plateResult = $derived.by((): PlateCalculation | null => {
 		const weight = parseFloat(plateTargetWeight);
 		const bar = parseFloat(plateBarWeight);
 		if (weight > 0 && bar >= 0) {
@@ -37,7 +37,7 @@
 
 	// Volume Calculator
 	let volumeSets = $state<Array<{ weight: string; reps: string }>>([{ weight: '', reps: '' }]);
-	let volumeResult = $derived(() => {
+	let volumeResult = $derived.by(() => {
 		const sets = volumeSets
 			.map((s) => ({
 				weight: parseFloat(s.weight) || 0,

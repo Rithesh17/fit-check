@@ -7,7 +7,7 @@
 
 	let muscleGroupData = $state<Map<string, number>>(new Map());
 	let isLoading = $state(true);
-	let chartCanvas: HTMLCanvasElement;
+	let chartCanvas = $state<HTMLCanvasElement | null>(null);
 	let chartInstance: Chart | null = null;
 	
 	// Custom exercises from database

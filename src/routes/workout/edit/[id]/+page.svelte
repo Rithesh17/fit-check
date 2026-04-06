@@ -51,7 +51,14 @@
 		customExercises = await loadCustomExercises();
 		recentExercises = await getRecentExercises(8);
 
-		const result = await loadTemplateById(templateId);
+		const id = templateId;
+		if (!id) {
+			toast.error('Template not found');
+			goto('/workouts');
+			return;
+		}
+
+		const result = await loadTemplateById(id);
 		if (!result) {
 			toast.error('Template not found');
 			goto('/workouts');
@@ -279,15 +286,21 @@
 						...base,
 						sets: { type: 'cardio', durationMinutes: ex.durationMinutes, calories: ex.calories }
 					};
-				} else {
+				} else if (ex.exerciseType === 'stretches') {
 					return {
 						...base,
 						sets: { type: 'stretches', durationSeconds: ex.durationSeconds, reps: ex.reps }
 					};
 				}
+				throw new Error('Unknown exercise type');
 			});
 
-			await updateTemplate(templateId, workoutName || 'Workout', templateExercises);
+			const id = templateId;
+			if (!id) {
+				toast.error('Template not found');
+				return;
+			}
+			await updateTemplate(id, workoutName || 'Workout', templateExercises);
 			toast.success('Template updated');
 			goto('/workouts');
 		} catch (error) {

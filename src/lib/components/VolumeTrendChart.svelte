@@ -19,7 +19,7 @@
 
 	let volumes = $state<WorkoutVolume[]>([]);
 	let isLoading = $state(true);
-	let chartCanvas: HTMLCanvasElement;
+	let chartCanvas = $state<HTMLCanvasElement | null>(null);
 	let chartInstance: Chart | null = null;
 	let currentUnit = $state<WeightUnit>('kg');
 	
@@ -147,9 +147,11 @@
 				},
 				scales: {
 					x: {
+						border: {
+							display: false
+						},
 						grid: {
-							color: 'var(--color-border)',
-							drawBorder: false
+							color: 'var(--color-border)'
 						},
 						ticks: {
 							color: 'var(--color-muted)',
@@ -157,9 +159,11 @@
 						}
 					},
 					y: {
+						border: {
+							display: false
+						},
 						grid: {
-							color: 'var(--color-border)',
-							drawBorder: false
+							color: 'var(--color-border)'
 						},
 						ticks: {
 							color: 'var(--color-muted)',

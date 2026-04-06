@@ -4,6 +4,7 @@
  */
 
 import { getExerciseById, isTimeBased, type Exercise } from './exercises';
+import type { WorkoutExercise } from '$lib/types/workout';
 
 export interface WorkoutTemplateExercise {
 	exerciseId: string;
@@ -293,16 +294,7 @@ export function getTemplateExercises(
 export function templateToWorkoutExercises(
 	template: WorkoutTemplate,
 	customExercises: Array<Exercise & { id: string }> = []
-): Array<{
-	exercise: Exercise;
-	exerciseType: 'weights' | 'bodyweight' | 'cardio' | 'stretches';
-	sets?: Array<{ reps: number; weight: number; rest: number; completed: boolean }>;
-	durationMinutes?: number;
-	calories?: number;
-	durationSeconds?: number;
-	reps?: number;
-	completed?: boolean;
-}> {
+): WorkoutExercise[] {
 	return getTemplateExercises(template, customExercises).map(({ exercise, sets, reps, durationSeconds, restSeconds }) => {
 		if (exercise.exerciseType === 'cardio') {
 			return {
