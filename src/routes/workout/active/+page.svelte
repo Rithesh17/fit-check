@@ -69,6 +69,7 @@
 	let setTimerSeconds = $state(0);
 	let setTimerInterval: ReturnType<typeof setInterval> | null = $state(null);
 	let setTimerRunning = $state(false);
+	let workoutMode = $state<'circuit' | 'straight'>('circuit');
 	
 	const currentUnit = $derived($unitPreference);
 
@@ -175,7 +176,7 @@
 
 	// Get next exercise in circuit order
 	const nextExerciseInCircuit = $derived.by(() => {
-		if (!showRestTimer || !isRestBetweenExercises) return null;
+		if (!showRestTimer || !isRestBetweenExercises || workoutMode !== 'circuit') return null;
 		
 		// Find next exercise with same set index that's not completed
 		for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
@@ -216,6 +217,58 @@
 		}
 		
 		return null;
+	});
+
+	// Get next target in straight-sets mode (next set of same exercise, or first set of next exercise)
+	const nextInStraight = $derived.by(() => {
+		if (!showRestTimer || !isRestBetweenExercises || workoutMode !== 'straight') return null;
+
+		const currentEx = selectedExercises[currentExerciseIndex];
+		if (currentEx?.exerciseType === 'weights' || currentEx?.exerciseType === 'bodyweight') {
+			// Next incomplete set of same exercise
+			for (let setIdx = currentSetIndex + 1; setIdx < currentEx.sets.length; setIdx++) {
+				if (!currentEx.sets[setIdx].completed) {
+					return {
+						type: 'same_exercise' as const,
+						exercise: currentEx.exercise,
+						exerciseData: currentEx,
+						exerciseIndex: currentExerciseIndex,
+						setIndex: setIdx,
+						set: currentEx.sets[setIdx]
+					};
+				}
+			}
+		}
+		// First incomplete set of next exercise
+		for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+				const firstIncomplete = ex.sets.findIndex(s => !s.completed);
+				if (firstIncomplete !== -1) {
+					return {
+						type: 'next_exercise' as const,
+						exercise: ex.exercise,
+						exerciseData: ex,
+						exerciseIndex: exIdx,
+						setIndex: firstIncomplete,
+						set: ex.sets[firstIncomplete]
+					};
+				}
+			}
+		}
+		return null;
+	});
+
+	// Overview of all exercises with per-exercise set completion (used in straight sets mode)
+	const exercisesOverview = $derived.by(() => {
+		return selectedExercises.map((ex, exIdx) => {
+			const isCurrent = exIdx === currentExerciseIndex;
+			if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+				const completedSets = ex.sets.filter(s => s.completed).length;
+				return { exercise: ex.exercise, exerciseData: ex, exerciseIndex: exIdx, isCurrent, completedSets, totalSets: ex.sets.length };
+			}
+			return { exercise: ex.exercise, exerciseData: ex, exerciseIndex: exIdx, isCurrent, completedSets: ex.completed ? 1 : 0, totalSets: 1 };
+		});
 	});
 
 	onMount(async () => {
@@ -474,8 +527,11 @@
 			// Mark set as completed
 			updateSetValue('completed', true);
 
-			// Circuit-style: Move to same set index of next exercise, or next set round
-			moveToNextInCircuit();
+			if (workoutMode === 'circuit') {
+				moveToNextInCircuit();
+			} else {
+				moveToNextInStraight();
+			}
 		} else {
 			// Cardio or stretches - mark as completed and move to next
 			selectedExercises = selectedExercises.map((ex, idx) => {
@@ -546,6 +602,60 @@
 		finishWorkout(true);
 	}
 
+	/**
+	 * Straight-sets progression: complete all sets of current exercise before moving to next
+	 */
+	function moveToNextInStraight() {
+		showRestTimer = false;
+		isRestBetweenExercises = false;
+
+		const currentEx = currentExerciseData;
+		if (!currentEx || (currentEx.exerciseType !== 'weights' && currentEx.exerciseType !== 'bodyweight')) return;
+
+		// Find next incomplete set of current exercise
+		for (let setIdx = currentSetIndex + 1; setIdx < currentEx.sets.length; setIdx++) {
+			if (!currentEx.sets[setIdx].completed) {
+				if (restDurationBetweenExercises > 0) {
+					showRestTimer = true;
+					isRestBetweenExercises = true;
+				} else {
+					currentSetIndex = setIdx;
+				}
+				return;
+			}
+		}
+
+		// All sets of current exercise done — find next exercise
+		for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+				const firstIncomplete = ex.sets.findIndex(s => !s.completed);
+				if (firstIncomplete !== -1) {
+					if (restDurationBetweenExercises > 0) {
+						showRestTimer = true;
+						isRestBetweenExercises = true;
+					} else {
+						currentExerciseIndex = exIdx;
+						currentSetIndex = firstIncomplete;
+					}
+					return;
+				}
+			} else if ((ex.exerciseType === 'cardio' || ex.exerciseType === 'stretches') && !ex.completed) {
+				if (restDurationBetweenExercises > 0) {
+					showRestTimer = true;
+					isRestBetweenExercises = true;
+				} else {
+					currentExerciseIndex = exIdx;
+					currentSetIndex = 0;
+					if (ex.exerciseType === 'cardio') startCardioTimer();
+				}
+				return;
+			}
+		}
+
+		finishWorkout(true);
+	}
+
 	function moveToNextExercise() {
 		showRestTimer = false;
 		isRestBetweenExercises = false;
@@ -590,70 +700,81 @@
 
 	function skipRest() {
 		showRestTimer = false;
-		
-		// Check if we're skipping rest between exercises (circuit mode)
-		if (isRestBetweenExercises) {
-			isRestBetweenExercises = false;
-			// Move to next exercise with same set index, or next set round
-			for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
-				const ex = selectedExercises[exIdx];
-				if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') && 
-					currentSetIndex < ex.sets.length) {
-					const set = ex.sets[currentSetIndex];
-					if (!set.completed) {
-						currentExerciseIndex = exIdx;
-						// Keep same set index
+
+		if (!isRestBetweenExercises) {
+			// Legacy set rest skip
+			const nextExerciseIndex = currentExerciseIndex + 1;
+			if (nextExerciseIndex < selectedExercises.length) {
+				currentExerciseIndex = nextExerciseIndex;
+				currentSetIndex = 0;
+				if (selectedExercises[nextExerciseIndex]?.exerciseType === 'cardio') startCardioTimer();
+			} else {
+				finishWorkout(true);
+			}
+			return;
+		}
+
+		isRestBetweenExercises = false;
+
+		if (workoutMode === 'straight') {
+			// Same logic as handleRestComplete for straight mode
+			const currentEx = selectedExercises[currentExerciseIndex];
+			if (currentEx?.exerciseType === 'weights' || currentEx?.exerciseType === 'bodyweight') {
+				for (let setIdx = currentSetIndex + 1; setIdx < currentEx.sets.length; setIdx++) {
+					if (!currentEx.sets[setIdx].completed) {
+						currentSetIndex = setIdx;
 						return;
 					}
 				}
 			}
-			
-			// No more exercises with this set index, move to next set round
-			const nextSetIndex = currentSetIndex + 1;
-			for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
+			for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
 				const ex = selectedExercises[exIdx];
 				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
-					if (nextSetIndex < ex.sets.length) {
-						const set = ex.sets[nextSetIndex];
-						if (!set.completed) {
-							currentExerciseIndex = exIdx;
-							currentSetIndex = nextSetIndex;
-							// Start cardio timer if needed (though unlikely in circuit mode)
-							if (ex.exerciseType === 'cardio') {
-								startCardioTimer();
-							}
-							return;
-						}
+					const firstIncomplete = ex.sets.findIndex(s => !s.completed);
+					if (firstIncomplete !== -1) {
+						currentExerciseIndex = exIdx;
+						currentSetIndex = firstIncomplete;
+						return;
 					}
+				} else if ((ex.exerciseType === 'cardio' || ex.exerciseType === 'stretches') && !ex.completed) {
+					currentExerciseIndex = exIdx;
+					currentSetIndex = 0;
+					if (ex.exerciseType === 'cardio') startCardioTimer();
+					return;
 				}
 			}
-			
-			// All sets completed
 			finishWorkout(true);
 			return;
 		}
-		
-		// Legacy: skipping rest between sets (shouldn't happen in circuit mode)
-		const currentEx = currentExerciseData;
-		if (currentEx && (currentEx.exerciseType === 'weights' || currentEx.exerciseType === 'bodyweight')) {
-			const nextSetIndex = currentSetIndex + 1;
-			if (nextSetIndex < currentEx.sets.length) {
-				currentSetIndex = nextSetIndex;
-				return;
+
+		// Circuit mode: move to next exercise with same set index, then next round
+		for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') &&
+				currentSetIndex < ex.sets.length) {
+				const set = ex.sets[currentSetIndex];
+				if (!set.completed) {
+					currentExerciseIndex = exIdx;
+					return;
+				}
 			}
 		}
-		
-		// No more sets, move to next exercise
-		const nextExerciseIndex = currentExerciseIndex + 1;
-		if (nextExerciseIndex < selectedExercises.length) {
-			currentExerciseIndex = nextExerciseIndex;
-			currentSetIndex = 0;
-			if (selectedExercises[nextExerciseIndex]?.exerciseType === 'cardio') {
-				startCardioTimer();
+		const nextSetIndex = currentSetIndex + 1;
+		for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+				if (nextSetIndex < ex.sets.length) {
+					const set = ex.sets[nextSetIndex];
+					if (!set.completed) {
+						currentExerciseIndex = exIdx;
+						currentSetIndex = nextSetIndex;
+						if (ex.exerciseType === 'cardio') startCardioTimer();
+						return;
+					}
+				}
 			}
-		} else {
-			finishWorkout(true);
 		}
+		finishWorkout(true);
 	}
 
 	function updateSetValue(field: 'reps' | 'weight' | 'notes' | 'completed' | 'durationSeconds', value: number | string | boolean) {
@@ -870,6 +991,38 @@
 		currentSetIndex = setIndex;
 	}
 
+	function moveToPreviousInStraight() {
+		showRestTimer = false;
+		isRestBetweenExercises = false;
+
+		if (currentSetIndex > 0) {
+			currentSetIndex = currentSetIndex - 1;
+			return;
+		}
+		if (currentExerciseIndex > 0) {
+			currentExerciseIndex = currentExerciseIndex - 1;
+			const prevEx = selectedExercises[currentExerciseIndex];
+			if (prevEx.exerciseType === 'weights' || prevEx.exerciseType === 'bodyweight') {
+				currentSetIndex = prevEx.sets.length - 1;
+			} else {
+				currentSetIndex = 0;
+			}
+		}
+	}
+
+	function jumpToExercise(exerciseIndex: number) {
+		showRestTimer = false;
+		isRestBetweenExercises = false;
+		currentExerciseIndex = exerciseIndex;
+		const ex = selectedExercises[exerciseIndex];
+		if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+			const firstIncomplete = ex.sets.findIndex(s => !s.completed);
+			currentSetIndex = firstIncomplete !== -1 ? firstIncomplete : 0;
+		} else {
+			currentSetIndex = 0;
+		}
+	}
+
 	// ─── Previous set autofill ───────────────────────────────────────────────
 
 	async function loadPreviousSetData(exerciseId: string) {
@@ -1012,64 +1165,78 @@
 		showRestTimer = false;
 		const wasRestBetweenExercises = isRestBetweenExercises;
 		isRestBetweenExercises = false;
-		
-		// Circuit-style progression: Move to same set index of next exercise, or next set round
-		if (wasRestBetweenExercises) {
-			// Rest between exercises in circuit mode - move to next exercise with same set index
-			for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
-				const ex = selectedExercises[exIdx];
-				if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') && 
-					currentSetIndex < ex.sets.length) {
-					const set = ex.sets[currentSetIndex];
-					if (!set.completed) {
-						currentExerciseIndex = exIdx;
-						// Keep same set index (same round)
-						// Start cardio timer if needed (though unlikely in circuit mode)
-						if (ex.exerciseType === 'cardio') {
-							startCardioTimer();
-						}
-						return;
-					}
-				}
-			}
-			
-			// No more exercises with this set index, move to next set round
-			const nextSetIndex = currentSetIndex + 1;
-			for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
-				const ex = selectedExercises[exIdx];
-				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
-					if (nextSetIndex < ex.sets.length) {
-						const set = ex.sets[nextSetIndex];
-						if (!set.completed) {
-							currentExerciseIndex = exIdx;
-							currentSetIndex = nextSetIndex;
-							// Start cardio timer if needed
-							if (ex.exerciseType === 'cardio') {
-								startCardioTimer();
-							}
-							return;
-						}
-					}
-				}
-			}
-			
-			// All sets completed
-			finishWorkout(true);
-		} else {
-			// Legacy mode: Move to next exercise (not circuit mode)
+
+		if (!wasRestBetweenExercises) {
+			// Legacy set rest (shouldn't normally occur)
 			const nextExerciseIndex = currentExerciseIndex + 1;
 			if (nextExerciseIndex < selectedExercises.length) {
 				currentExerciseIndex = nextExerciseIndex;
 				currentSetIndex = 0;
-				// Start cardio timer if next exercise is cardio
-				if (selectedExercises[nextExerciseIndex]?.exerciseType === 'cardio') {
-					startCardioTimer();
-				}
+				if (selectedExercises[nextExerciseIndex]?.exerciseType === 'cardio') startCardioTimer();
 			} else {
-				// This is the last exercise, finish the workout
 				finishWorkout();
 			}
+			return;
 		}
+
+		if (workoutMode === 'straight') {
+			// Straight sets: next incomplete set of current exercise, then next exercise
+			const currentEx = selectedExercises[currentExerciseIndex];
+			if (currentEx?.exerciseType === 'weights' || currentEx?.exerciseType === 'bodyweight') {
+				for (let setIdx = currentSetIndex + 1; setIdx < currentEx.sets.length; setIdx++) {
+					if (!currentEx.sets[setIdx].completed) {
+						currentSetIndex = setIdx;
+						return;
+					}
+				}
+			}
+			for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+				const ex = selectedExercises[exIdx];
+				if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+					const firstIncomplete = ex.sets.findIndex(s => !s.completed);
+					if (firstIncomplete !== -1) {
+						currentExerciseIndex = exIdx;
+						currentSetIndex = firstIncomplete;
+						return;
+					}
+				} else if ((ex.exerciseType === 'cardio' || ex.exerciseType === 'stretches') && !ex.completed) {
+					currentExerciseIndex = exIdx;
+					currentSetIndex = 0;
+					if (ex.exerciseType === 'cardio') startCardioTimer();
+					return;
+				}
+			}
+			finishWorkout(true);
+			return;
+		}
+
+		// Circuit mode: move to next exercise with same set index, then next round
+		for (let exIdx = currentExerciseIndex + 1; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if ((ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') &&
+				currentSetIndex < ex.sets.length) {
+				const set = ex.sets[currentSetIndex];
+				if (!set.completed) {
+					currentExerciseIndex = exIdx;
+					return;
+				}
+			}
+		}
+		const nextSetIndex = currentSetIndex + 1;
+		for (let exIdx = 0; exIdx < selectedExercises.length; exIdx++) {
+			const ex = selectedExercises[exIdx];
+			if (ex.exerciseType === 'weights' || ex.exerciseType === 'bodyweight') {
+				if (nextSetIndex < ex.sets.length) {
+					const set = ex.sets[nextSetIndex];
+					if (!set.completed) {
+						currentExerciseIndex = exIdx;
+						currentSetIndex = nextSetIndex;
+						return;
+					}
+				}
+			}
+		}
+		finishWorkout(true);
 	}
 </script>
 
@@ -1093,24 +1260,56 @@
 					{isSaving ? 'Saving...' : 'Finish'}
 				</button>
 			</div>
+
+			<!-- Mode Toggle -->
+			<div class="flex items-center gap-1 bg-[var(--color-card-hover)] rounded-lg p-0.5 w-fit mb-2">
+				<button
+					onclick={() => (workoutMode = 'circuit')}
+					class="px-3 py-1 text-xs font-semibold rounded-md transition-all {workoutMode === 'circuit' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-[var(--color-muted)] hover:text-[var(--color-foreground)]'}"
+				>
+					Circuit
+				</button>
+				<button
+					onclick={() => (workoutMode = 'straight')}
+					class="px-3 py-1 text-xs font-semibold rounded-md transition-all {workoutMode === 'straight' ? 'bg-[var(--color-primary)] text-white shadow-sm' : 'text-[var(--color-muted)] hover:text-[var(--color-foreground)]'}"
+				>
+					Straight Sets
+				</button>
+			</div>
+
 			{#if currentExerciseData?.exerciseType === 'weights' || currentExerciseData?.exerciseType === 'bodyweight'}
-				<!-- Round Information -->
 				<div class="mb-2">
-					<div class="flex items-center gap-3 mb-2">
-						<div class="px-3 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded-full font-bold text-sm">
-							Round {currentRound} of {maxRounds}
+					{#if workoutMode === 'circuit'}
+						<div class="flex items-center gap-3 mb-2">
+							<div class="px-3 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded-full font-bold text-sm">
+								Round {currentRound} of {maxRounds}
+							</div>
+							<div class="text-sm text-[var(--color-muted)]">
+								Exercise {roundProgress} of {exercisesInRound} in this round
+							</div>
 						</div>
-						<div class="text-sm text-[var(--color-muted)]">
-							Exercise {roundProgress} of {exercisesInRound} in this round
+						<div class="w-full h-2 bg-[var(--color-card-hover)] rounded-full overflow-hidden">
+							<div
+								class="h-full bg-[var(--gradient-primary)] transition-all duration-300"
+								style="width: {exercisesInRound > 0 ? (roundProgress / exercisesInRound) * 100 : 0}%"
+							></div>
 						</div>
-					</div>
-					<!-- Round Progress Bar -->
-					<div class="w-full h-2 bg-[var(--color-card-hover)] rounded-full overflow-hidden">
-						<div 
-							class="h-full bg-[var(--gradient-primary)] transition-all duration-300"
-							style="width: {(exercisesInRound > 0 ? (roundProgress / exercisesInRound) * 100 : 0)}%"
-						></div>
-					</div>
+					{:else}
+						<div class="flex items-center gap-3 mb-2">
+							<div class="px-3 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] rounded-full font-bold text-sm">
+								Exercise {currentExerciseIndex + 1} of {selectedExercises.length}
+							</div>
+							<div class="text-sm text-[var(--color-muted)]">
+								Set {currentSetIndex + 1} of {currentExerciseData.sets.length}
+							</div>
+						</div>
+						<div class="w-full h-2 bg-[var(--color-card-hover)] rounded-full overflow-hidden">
+							<div
+								class="h-full bg-[var(--gradient-primary)] transition-all duration-300"
+								style="width: {currentExerciseData.sets.length > 0 ? ((currentSetIndex + 1) / currentExerciseData.sets.length) * 100 : 0}%"
+							></div>
+						</div>
+					{/if}
 				</div>
 			{/if}
 			<div class="flex items-center gap-2 text-sm text-[var(--color-muted)]">
@@ -1128,7 +1327,13 @@
 			<div class="fitness-card border-2 border-[var(--color-primary)]/50 bg-[var(--color-primary)]/5 mb-4">
 				<div class="text-center mb-3">
 					<div class="text-sm text-[var(--color-muted)] mb-1">
-						Resting before next exercise in Round {currentRound}
+						{#if workoutMode === 'circuit'}
+							Resting before next exercise in Round {currentRound}
+						{:else if nextInStraight?.type === 'same_exercise'}
+							Rest between sets — {nextInStraight.exercise.name}
+						{:else}
+							Resting before next exercise
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -1141,7 +1346,64 @@
 				vibrationEnabled={true}
 			/>
 			
-			<!-- Up Next Section -->
+			<!-- Up Next — Straight Sets -->
+			{#if nextInStraight}
+				<div class="fitness-card border-2 border-[var(--color-primary)]/50 bg-[var(--color-primary)]/5">
+					<h3 class="text-sm font-semibold text-[var(--color-muted)] mb-3 uppercase tracking-wide">
+						{nextInStraight.type === 'same_exercise' ? 'Up Next — Same Exercise' : 'Up Next — Next Exercise'}
+					</h3>
+					<div class="space-y-3">
+						<div>
+							<div class="flex items-center gap-2 mb-2">
+								<h4 class="text-xl font-bold text-[var(--color-foreground)] flex-1">
+									{nextInStraight.exercise.name}
+								</h4>
+								<button
+									onclick={() => (nextDetailExercise = nextInStraight!.exercise)}
+									class="p-1.5 text-[var(--color-muted)] hover:text-[var(--color-primary)] transition-colors flex-shrink-0"
+									aria-label="View exercise details"
+								>
+									<Info class="w-5 h-5" />
+								</button>
+							</div>
+							{#if nextInStraight.exercise.muscleGroups?.length > 0}
+								<div class="flex flex-wrap gap-2 mb-2">
+									{#each nextInStraight.exercise.muscleGroups as mg}
+										<span class="px-2 py-1 bg-[var(--color-primary)]/20 text-[var(--color-primary)] text-xs rounded-full">{mg}</span>
+									{/each}
+								</div>
+							{/if}
+						</div>
+						{#if nextInStraight.set}
+							<div class="pt-3 border-t border-[var(--color-border)] space-y-2">
+								<div class="flex items-center justify-between">
+									<span class="text-sm font-semibold text-[var(--color-muted)]">Set</span>
+									<span class="text-lg font-bold text-[var(--color-primary)]">
+										{nextInStraight.setIndex + 1} of {nextInStraight.exerciseData.sets.length}
+									</span>
+								</div>
+								{#if isTimeBasedExercise(nextInStraight.exercise)}
+									<div class="flex items-center justify-between">
+										<span class="text-sm font-semibold text-[var(--color-muted)]">Duration</span>
+										<span class="text-lg font-bold text-[var(--color-foreground)]">{formatTime(nextInStraight.set.durationSeconds || 0)}</span>
+									</div>
+								{:else}
+									<div class="flex items-center justify-between">
+										<span class="text-sm font-semibold text-[var(--color-muted)]">Reps</span>
+										<span class="text-lg font-bold text-[var(--color-foreground)]">{nextInStraight.set.reps}</span>
+									</div>
+									<div class="flex items-center justify-between">
+										<span class="text-sm font-semibold text-[var(--color-muted)]">Weight</span>
+										<span class="text-lg font-bold text-[var(--color-foreground)]">{formatWeight(nextInStraight.set.weight || 0, currentUnit)}</span>
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
+			<!-- Up Next Section — Circuit -->
 			{#if nextExerciseInCircuit}
 				<div class="fitness-card border-2 border-[var(--color-primary)]/50 bg-[var(--color-primary)]/5">
 					<h3 class="text-sm font-semibold text-[var(--color-muted)] mb-3 uppercase tracking-wide">
@@ -1269,17 +1531,21 @@
 				<!-- Current Set - Weights/Bodyweight -->
 				{#if currentSet && (currentExerciseData?.exerciseType === 'weights' || currentExerciseData?.exerciseType === 'bodyweight')}
 					<div class="space-y-4">
-						<!-- Round Overview Toggle -->
+						<!-- Overview Toggle -->
 						<button
 							onclick={() => (showRoundOverview = !showRoundOverview)}
 							class="w-full flex items-center justify-between p-3 bg-[var(--color-card-hover)] border border-[var(--color-border)] rounded-lg hover:border-[var(--color-primary)] transition-colors"
 						>
 							<div class="flex items-center gap-2">
 								<span class="text-sm font-semibold text-[var(--color-foreground)]">
-									Round {currentRound} Overview
+									{workoutMode === 'circuit' ? `Round ${currentRound} Overview` : 'Exercise Overview'}
 								</span>
 								<span class="text-xs text-[var(--color-muted)]">
-									({exercisesInCurrentRound.filter(e => e.completed).length}/{exercisesInCurrentRound.length} completed)
+									{#if workoutMode === 'circuit'}
+										({exercisesInCurrentRound.filter(e => e.completed).length}/{exercisesInCurrentRound.length} completed)
+									{:else}
+										({exercisesOverview.filter(e => e.completedSets === e.totalSets).length}/{exercisesOverview.length} done)
+									{/if}
 								</span>
 							</div>
 							{#if showRoundOverview}
@@ -1289,88 +1555,107 @@
 							{/if}
 						</button>
 
-						<!-- Round Overview -->
 						{#if showRoundOverview}
 							<div class="space-y-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card-hover)] px-3 pb-4 pt-3">
-								{#each exercisesInCurrentRound as item}
-								<div class="flex items-center gap-1 {item.isCurrent ? 'bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50 rounded' : ''}">
-									<button
-										onclick={() => jumpToExerciseInRound(item.exerciseIndex, item.setIndex)}
-										class="flex-1 flex items-center justify-between p-2 rounded hover:bg-[var(--color-background)] transition-colors text-left min-w-0"
-									>
-										<div class="flex items-center gap-2 flex-1 min-w-0">
-											{#if item.completed}
-												<Check class="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" />
-											{:else if item.isCurrent}
-												<ChevronRight class="w-4 h-4 text-[var(--color-primary)] flex-shrink-0" />
-											{:else}
-												<div class="w-4 h-4 rounded-full border-2 border-[var(--color-muted)] flex-shrink-0"></div>
-											{/if}
-											<span class="text-sm font-medium text-[var(--color-foreground)] truncate {item.isCurrent ? 'font-bold' : ''}">
-												{item.exercise.name}
-											</span>
+								{#if workoutMode === 'circuit'}
+									<!-- Circuit: exercises in current round -->
+									{#each exercisesInCurrentRound as item}
+										<div class="flex items-center gap-1 {item.isCurrent ? 'bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50 rounded' : ''}">
+											<button
+												onclick={() => jumpToExerciseInRound(item.exerciseIndex, item.setIndex)}
+												class="flex-1 flex items-center justify-between p-2 rounded hover:bg-[var(--color-background)] transition-colors text-left min-w-0"
+											>
+												<div class="flex items-center gap-2 flex-1 min-w-0">
+													{#if item.completed}
+														<Check class="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" />
+													{:else if item.isCurrent}
+														<ChevronRight class="w-4 h-4 text-[var(--color-primary)] flex-shrink-0" />
+													{:else}
+														<div class="w-4 h-4 rounded-full border-2 border-[var(--color-muted)] flex-shrink-0"></div>
+													{/if}
+													<span class="text-sm font-medium text-[var(--color-foreground)] truncate {item.isCurrent ? 'font-bold' : ''}">
+														{item.exercise.name}
+													</span>
+												</div>
+												<div class="text-xs text-[var(--color-muted)] flex-shrink-0 ml-2">
+													{#if isTimeBasedExercise(item.exercise)}
+														{item.set.durationSeconds || 0}s
+													{:else}
+														{item.set.reps} reps {item.set.weight > 0 ? '• ' + formatWeight(item.set.weight, currentUnit) : ''}
+													{/if}
+												</div>
+											</button>
+											<div class="flex items-center flex-shrink-0">
+												<button onclick={() => moveExerciseUp(item.exerciseIndex)} disabled={item.exerciseIndex === 0} class="p-1 text-[var(--color-muted)] hover:text-[var(--color-foreground)] disabled:opacity-30 transition-colors" title="Move up"><ArrowUp class="w-3.5 h-3.5" /></button>
+												<button onclick={() => moveExerciseDown(item.exerciseIndex)} disabled={item.exerciseIndex === selectedExercises.length - 1} class="p-1 text-[var(--color-muted)] hover:text-[var(--color-foreground)] disabled:opacity-30 transition-colors" title="Move down"><ArrowDown class="w-3.5 h-3.5" /></button>
+												<button onclick={() => removeExercise(item.exerciseIndex)} class="p-1 text-[var(--color-muted)] hover:text-red-400 transition-colors" title="Remove exercise"><Trash2 class="w-3.5 h-3.5" /></button>
+											</div>
 										</div>
-										<div class="text-xs text-[var(--color-muted)] flex-shrink-0 ml-2">
-											{#if isTimeBasedExercise(item.exercise)}
-												{item.set.durationSeconds || 0}s
-											{:else}
-												{item.set.reps} reps {item.set.weight > 0 ? '• ' + formatWeight(item.set.weight, currentUnit) : ''}
-											{/if}
+									{/each}
+								{:else}
+									<!-- Straight sets: all exercises with set completion -->
+									{#each exercisesOverview as item}
+										<div class="flex items-center gap-1 {item.isCurrent ? 'bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50 rounded' : ''}">
+											<button
+												onclick={() => jumpToExercise(item.exerciseIndex)}
+												class="flex-1 flex items-center justify-between p-2 rounded hover:bg-[var(--color-background)] transition-colors text-left min-w-0"
+											>
+												<div class="flex items-center gap-2 flex-1 min-w-0">
+													{#if item.completedSets === item.totalSets}
+														<Check class="w-4 h-4 text-[var(--color-accent)] flex-shrink-0" />
+													{:else if item.isCurrent}
+														<ChevronRight class="w-4 h-4 text-[var(--color-primary)] flex-shrink-0" />
+													{:else}
+														<div class="w-4 h-4 rounded-full border-2 border-[var(--color-muted)] flex-shrink-0"></div>
+													{/if}
+													<span class="text-sm font-medium text-[var(--color-foreground)] truncate {item.isCurrent ? 'font-bold' : ''}">
+														{item.exercise.name}
+													</span>
+												</div>
+												<span class="text-xs text-[var(--color-muted)] flex-shrink-0 ml-2">
+													{item.completedSets}/{item.totalSets} sets
+												</span>
+											</button>
+											<div class="flex items-center flex-shrink-0">
+												<button onclick={() => moveExerciseUp(item.exerciseIndex)} disabled={item.exerciseIndex === 0} class="p-1 text-[var(--color-muted)] hover:text-[var(--color-foreground)] disabled:opacity-30 transition-colors" title="Move up"><ArrowUp class="w-3.5 h-3.5" /></button>
+												<button onclick={() => moveExerciseDown(item.exerciseIndex)} disabled={item.exerciseIndex === selectedExercises.length - 1} class="p-1 text-[var(--color-muted)] hover:text-[var(--color-foreground)] disabled:opacity-30 transition-colors" title="Move down"><ArrowDown class="w-3.5 h-3.5" /></button>
+												<button onclick={() => removeExercise(item.exerciseIndex)} class="p-1 text-[var(--color-muted)] hover:text-red-400 transition-colors" title="Remove exercise"><Trash2 class="w-3.5 h-3.5" /></button>
+											</div>
 										</div>
-									</button>
-									<div class="flex items-center flex-shrink-0">
-										<button
-											onclick={() => moveExerciseUp(item.exerciseIndex)}
-											disabled={item.exerciseIndex === 0}
-											class="p-1 text-[var(--color-muted)] hover:text-[var(--color-foreground)] disabled:opacity-30 transition-colors"
-											title="Move up"
-										>
-											<ArrowUp class="w-3.5 h-3.5" />
-										</button>
-										<button
-											onclick={() => moveExerciseDown(item.exerciseIndex)}
-											disabled={item.exerciseIndex === selectedExercises.length - 1}
-											class="p-1 text-[var(--color-muted)] hover:text-[var(--color-foreground)] disabled:opacity-30 transition-colors"
-											title="Move down"
-										>
-											<ArrowDown class="w-3.5 h-3.5" />
-										</button>
-										<button
-											onclick={() => removeExercise(item.exerciseIndex)}
-											class="p-1 text-[var(--color-muted)] hover:text-red-400 transition-colors"
-											title="Remove exercise"
-										>
-											<Trash2 class="w-3.5 h-3.5" />
-										</button>
-									</div>
-								</div>
-							{/each}
-							<button
-								type="button"
-								onclick={() => (showExercisePicker = true)}
-								class="mt-1 flex min-h-11 w-full items-center justify-center gap-2 rounded border border-dashed border-[var(--color-border)] px-3 py-3 text-sm font-medium leading-none text-[var(--color-muted)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
-							>
-								<span
-									class="inline-flex size-5 shrink-0 items-center justify-center text-current"
-									aria-hidden="true"
+									{/each}
+								{/if}
+								<button
+									type="button"
+									onclick={() => (showExercisePicker = true)}
+									class="mt-1 flex min-h-11 w-full items-center justify-center gap-2 rounded border border-dashed border-[var(--color-border)] px-3 py-3 text-sm font-medium leading-none text-[var(--color-muted)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
 								>
-									<Plus class="block h-4 w-4" strokeWidth={2} />
-								</span>
-								<span>Add Exercise</span>
-							</button>
+									<span class="inline-flex size-5 shrink-0 items-center justify-center text-current" aria-hidden="true">
+										<Plus class="block h-4 w-4" strokeWidth={2} />
+									</span>
+									<span>Add Exercise</span>
+								</button>
 							</div>
 						{/if}
 
 						<div class="text-center py-4">
-							<div class="text-sm text-[var(--color-muted)] mb-1">
-								Set {currentSetIndex + 1} of {currentExerciseData.sets.length} for this exercise
-							</div>
-							<div class="text-3xl font-bold text-[var(--color-primary)]">
-								Round {currentRound}
-							</div>
-							<div class="text-sm text-[var(--color-muted)] mt-1">
-								Exercise {roundProgress} of {exercisesInRound} in this round
-							</div>
+							{#if workoutMode === 'circuit'}
+								<div class="text-sm text-[var(--color-muted)] mb-1">
+									Set {currentSetIndex + 1} of {currentExerciseData.sets.length} for this exercise
+								</div>
+								<div class="text-3xl font-bold text-[var(--color-primary)]">
+									Round {currentRound}
+								</div>
+								<div class="text-sm text-[var(--color-muted)] mt-1">
+									Exercise {roundProgress} of {exercisesInRound} in this round
+								</div>
+							{:else}
+								<div class="text-sm text-[var(--color-muted)] mb-1">
+									Exercise {currentExerciseIndex + 1} of {selectedExercises.length}
+								</div>
+								<div class="text-3xl font-bold text-[var(--color-primary)]">
+									Set {currentSetIndex + 1} of {currentExerciseData.sets.length}
+								</div>
+							{/if}
 						</div>
 
 						{#if isCurrentExerciseTimeBased}
@@ -1635,37 +1920,58 @@
 							Complete Set
 						</button>
 
-						<!-- Circuit Navigation Buttons -->
+						<!-- Navigation Buttons -->
 						<div class="flex gap-2">
-							<!-- Go Back Button -->
-							{#if (currentExerciseIndex > 0 || (currentExerciseIndex === 0 && currentSetIndex > 0))}
-								<button
-									onclick={moveToPreviousInCircuit}
-									class="flex-1 py-2 text-sm font-semibold text-[var(--color-foreground)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-card-hover)] flex items-center justify-center gap-1"
-								>
-									<ChevronLeft class="w-4 h-4" />
-									Go Back
-								</button>
-							{/if}
-							
-							<!-- Next in Round Button -->
-							{#if exercisesInCurrentRound.some(e => !e.completed && e.exerciseIndex > currentExerciseIndex)}
-								<button
-									onclick={moveToNextInRound}
-									class="flex-1 py-2 text-sm font-semibold text-[var(--color-foreground)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-card-hover)] flex items-center justify-center gap-1"
-								>
-									Next in Round
-									<ChevronRight class="w-4 h-4" />
-								</button>
-							{:else if currentRound < maxRounds}
-								<!-- Skip to Next Round Button -->
-								<button
-									onclick={moveToNextRound}
-									class="flex-1 py-2 text-sm font-semibold text-[var(--color-primary)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50 rounded-lg hover:bg-[var(--color-primary)]/20 flex items-center justify-center gap-1"
-								>
-									Skip to Round {currentRound + 1}
-									<ChevronRight class="w-4 h-4" />
-								</button>
+							{#if workoutMode === 'circuit'}
+								<!-- Circuit: Go Back -->
+								{#if currentExerciseIndex > 0 || (currentExerciseIndex === 0 && currentSetIndex > 0)}
+									<button
+										onclick={moveToPreviousInCircuit}
+										class="flex-1 py-2 text-sm font-semibold text-[var(--color-foreground)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-card-hover)] flex items-center justify-center gap-1"
+									>
+										<ChevronLeft class="w-4 h-4" />
+										Go Back
+									</button>
+								{/if}
+								<!-- Circuit: Next in Round / Skip to Round -->
+								{#if exercisesInCurrentRound.some(e => !e.completed && e.exerciseIndex > currentExerciseIndex)}
+									<button
+										onclick={moveToNextInRound}
+										class="flex-1 py-2 text-sm font-semibold text-[var(--color-foreground)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-card-hover)] flex items-center justify-center gap-1"
+									>
+										Next in Round
+										<ChevronRight class="w-4 h-4" />
+									</button>
+								{:else if currentRound < maxRounds}
+									<button
+										onclick={moveToNextRound}
+										class="flex-1 py-2 text-sm font-semibold text-[var(--color-primary)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50 rounded-lg hover:bg-[var(--color-primary)]/20 flex items-center justify-center gap-1"
+									>
+										Skip to Round {currentRound + 1}
+										<ChevronRight class="w-4 h-4" />
+									</button>
+								{/if}
+							{:else}
+								<!-- Straight Sets: Go Back -->
+								{#if currentExerciseIndex > 0 || currentSetIndex > 0}
+									<button
+										onclick={moveToPreviousInStraight}
+										class="flex-1 py-2 text-sm font-semibold text-[var(--color-foreground)] bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-card-hover)] flex items-center justify-center gap-1"
+									>
+										<ChevronLeft class="w-4 h-4" />
+										Go Back
+									</button>
+								{/if}
+								<!-- Straight Sets: Skip to Next Exercise -->
+								{#if currentExerciseIndex < selectedExercises.length - 1}
+									<button
+										onclick={() => jumpToExercise(currentExerciseIndex + 1)}
+										class="flex-1 py-2 text-sm font-semibold text-[var(--color-primary)] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/50 rounded-lg hover:bg-[var(--color-primary)]/20 flex items-center justify-center gap-1"
+									>
+										Next Exercise
+										<ChevronRight class="w-4 h-4" />
+									</button>
+								{/if}
 							{/if}
 						</div>
 					</div>
