@@ -9,7 +9,11 @@ export type WorkoutSet = {
 	durationSeconds?: number;
 };
 
-export type WorkoutExercise =
+/**
+ * One alternative within a workout slot.
+ * The union covers all exercise types.
+ */
+export type SlotAlternative =
 	| {
 			exercise: Exercise;
 			exerciseType: 'weights' | 'bodyweight';
@@ -29,3 +33,13 @@ export type WorkoutExercise =
 			reps: number;
 			completed: boolean;
 	  };
+
+/**
+ * A slot is one position in the workout.
+ * alternatives[0] is the primary; the rest are fallbacks the user can choose from.
+ * chosenIndex is set when the user picks during an active workout.
+ */
+export type WorkoutSlot = {
+	alternatives: SlotAlternative[];
+	chosenIndex?: number;
+};

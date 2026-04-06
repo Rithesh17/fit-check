@@ -1,50 +1,36 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { Home, Activity, TrendingUp, User } from 'lucide-svelte';
+	import { Home, PlusCircle, TrendingUp, User } from 'lucide-svelte';
 
 	const navItems = [
-		{ path: '/', label: 'Home', icon: Home },
-		{ path: '/workouts', label: 'Workouts', icon: Activity },
-		{ path: '/progress', label: 'Progress', icon: TrendingUp },
-		{ path: '/profile', label: 'Profile', icon: User }
+		{ label: 'Home', icon: Home, href: '/', exact: true },
+		{ label: 'Log', icon: PlusCircle, href: '/log', prefixes: ['/log', '/workout'] },
+		{ label: 'Progress', icon: TrendingUp, href: '/progress', prefixes: ['/progress'] },
+		{ label: 'You', icon: User, href: '/you', prefixes: ['/you', '/profile'] }
 	];
 
-	function isActive(path: string, currentPathname: string): boolean {
-		if (path === '/') {
-			// Home should only be active on exact match
-			return currentPathname === '/';
-		}
-		// Other paths should match if current path starts with them
-		return currentPathname.startsWith(path);
+	function isActive(item: (typeof navItems)[number]): boolean {
+		const path = $page.url.pathname;
+		if (item.exact) return path === item.href;
+		return item.prefixes?.some((p) => path.startsWith(p)) ?? false;
 	}
 </script>
 
-<nav class="fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-card)] border-t border-[var(--color-border)]">
-	<div class="max-w-md mx-auto">
-		<div class="flex items-center justify-around px-2 py-2">
-			{#each navItems as item}
-				{@const Icon = item.icon}
-				{@const pathname = $page.url.pathname}
-				{@const active = isActive(item.path, pathname)}
-				<a
-					href={item.path}
-					class="flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-colors {active
-						? 'text-[var(--color-primary)]'
-						: 'text-[var(--color-muted)]'}"
-				>
-					<Icon class="w-6 h-6" />
-					<span class="text-xs font-medium">{item.label}</span>
-					{#if active}
-						<div class="absolute bottom-0 w-8 h-1 bg-[var(--color-primary)] rounded-t-full"></div>
-					{/if}
-				</a>
-			{/each}
-		</div>
+<nav class="fixed bottom-0 left-0 right-0 z-50 border-t border-[var(--color-border)] bg-[var(--color-card)]">
+	<div class="mx-auto flex max-w-md items-stretch">
+		{#each navItems as item}
+			{@const active = isActive(item)}
+			<a
+				href={item.href}
+				class="relative flex flex-1 flex-col items-center justify-center gap-1 py-3 transition-colors duration-150
+					{active ? 'text-[var(--color-primary)]' : 'text-[var(--color-muted)] hover:text-[var(--color-muted-light)]'}"
+			>
+				{#if active}
+					<span class="absolute top-0 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-[var(--color-primary)]"></span>
+				{/if}
+				<svelte:component this={item.icon} size={22} strokeWidth={active ? 2.2 : 1.8} />
+				<span class="text-[10px] font-medium tracking-wide">{item.label}</span>
+			</a>
+		{/each}
 	</div>
 </nav>
-
-<style>
-	nav a {
-		position: relative;
-	}
-</style>

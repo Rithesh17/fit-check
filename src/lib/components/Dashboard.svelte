@@ -7,9 +7,11 @@
 	import StreakCalendar from './StreakCalendar.svelte';
 	import { goto } from '$app/navigation';
 	import { weeklySchedule, DAYS_OF_WEEK } from '$lib/stores/schedule';
-	import { loadTemplates } from '$lib/services/templates';
-	import { loadCustomExercises, findExercise } from '$lib/services/exercises';
-	import { activeWorkout, type ActiveWorkoutExercise } from '$lib/stores/active-workout';
+	import { loadTemplateById } from '$lib/services/templates';
+	import { loadCustomExercises } from '$lib/services/exercises';
+	import { activeWorkout, buildDefaultPayload } from '$lib/stores/active-workout';
+	import { templateToActiveSlots } from '$lib/data/workout-templates';
+	import { RECENT_WORKOUTS_LIMIT } from '$lib/data/config';
 
 	let { data: _pageData }: { data?: object } = $props();
 
@@ -24,9 +26,7 @@
 	let totalWorkouts = $state(0);
 	let isLoading = $state(true);
 
-	// Today's scheduled workout
 	let scheduledTemplate = $state<{ id: string; name: string | null; exercise_count: number } | null>(null);
-	let templateExercisesMap = $state<Record<string, any[]>>({});
 	const todayDay = DAYS_OF_WEEK[new Date().getDay()];
 
 	onMount(async () => {
@@ -37,7 +37,6 @@
 		try {
 			isLoading = true;
 
-			// Fetch all workout dates for streak + stats
 			const { data: workouts, error } = await supabase
 				.from('workouts')
 				.select('date')
@@ -46,93 +45,86 @@
 			if (error) throw error;
 
 			const workoutDates = (workouts || []).map((w: any) => new Date(w.date));
-
-			// Calculate streak
 			streakData = calculateStreak(workoutDates);
 
-			// Calculate workouts this week
 			const now = new Date();
 			const weekStart = new Date(now);
 			weekStart.setDate(now.getDate() - now.getDay());
 			weekStart.setHours(0, 0, 0, 0);
 
-			workoutsThisWeek = workoutDates.filter(date => date >= weekStart).length;
+			workoutsThisWeek = workoutDates.filter((date) => date >= weekStart).length;
 			totalWorkouts = workoutDates.length;
-
 		} catch (error) {
 			console.error('Error loading dashboard data:', error);
 		} finally {
 			isLoading = false;
 		}
 
-		// Load scheduled workout for today (non-critical)
+		// Load today's scheduled workout (non-critical)
 		try {
-			const { templates, exercisesMap } = await loadTemplates();
-			templateExercisesMap = exercisesMap as any;
 			const todayTemplateId = $weeklySchedule[todayDay];
 			if (todayTemplateId) {
-				scheduledTemplate = templates.find((t) => t.id === todayTemplateId) ?? null;
+				const result = await loadTemplateById(todayTemplateId);
+				if (result) scheduledTemplate = result.template;
 			}
 		} catch {
-			// Ignore — schedule is optional
+			// Schedule is optional — ignore errors
 		}
 	}
 
 	async function startScheduledWorkout() {
 		if (!scheduledTemplate) return;
 		const customExercises = await loadCustomExercises();
-		const exs = templateExercisesMap[scheduledTemplate.id] || [];
-		const exercisesPayload = exs
-			.map((ex: any) => {
-				const exercise = findExercise(ex.exercise_id, customExercises);
-				if (!exercise) return null;
-				if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
-					let sets;
-					if (Array.isArray(ex.sets)) {
-						sets = (ex.sets.length ? ex.sets : [{ reps: exercise.defaultReps || 10, weight: 0, rest: exercise.defaultRestSeconds || 60 }]).map(
-							(s: any) => ({ ...s, completed: false })
-						);
-					} else {
-						sets = [{ reps: exercise.defaultReps || 10, weight: 0, rest: exercise.defaultRestSeconds || 60, completed: false }];
-					}
-					return { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: exercise.exerciseType, sets };
-				} else if (exercise.exerciseType === 'cardio') {
-					const rawSets = ex.sets as any;
-					return { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'cardio' as const, durationMinutes: rawSets?.durationMinutes || exercise.defaultDurationMinutes || 30, calories: rawSets?.calories || exercise.defaultCalories || 300, completed: false };
-				} else if (exercise.exerciseType === 'stretches') {
-					const rawSets = ex.sets as any;
-					return { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'stretches' as const, durationSeconds: rawSets?.durationSeconds || exercise.defaultDurationSeconds || 60, reps: rawSets?.reps || exercise.defaultRepsStretches || 10, completed: false };
-				}
-				return null;
+		const result = await loadTemplateById(scheduledTemplate.id);
+		if (!result) return;
+
+		// Reconstruct a WorkoutTemplate-like object from the loaded slots
+		const slots = templateToActiveSlots(
+			{
+				id: result.template.id,
+				name: result.template.name ?? '',
+				description: '',
+				muscleGroups: [],
+				slots: result.slots
+			},
+			customExercises
+		);
+
+		if (slots.length === 0) return;
+
+		activeWorkout.start(
+			buildDefaultPayload({
+				name: scheduledTemplate.name ?? 'Workout',
+				slots
 			})
-			.filter((e) => e != null) as ActiveWorkoutExercise[];
-		if (exercisesPayload.length === 0) return;
-		activeWorkout.start({ name: scheduledTemplate.name || 'Workout', notes: '', energyLevel: null, mood: '', restDurationBetweenExercises: 90, exercises: exercisesPayload });
+		);
 		goto('/workout/active');
 	}
 
 	const hasWorkedOutToday = $derived(workedOutToday(streakData.workoutDates));
 	const daysSince = $derived(daysSinceLastWorkout(streakData.workoutDates));
+
+	// suppress unused warning
+	void RECENT_WORKOUTS_LIMIT;
 </script>
 
 <div class="min-h-screen bg-[var(--color-background)] pb-20">
 	<!-- Header -->
-	<div class="sticky top-0 z-10 bg-[var(--color-background)]/95 backdrop-blur-sm border-b border-[var(--color-border)]">
-		<div class="max-w-md mx-auto px-4 py-4">
+	<div class="sticky top-0 z-10 border-b border-[var(--color-border)] bg-[var(--color-background)]/95 backdrop-blur-sm">
+		<div class="mx-auto max-w-md px-4 py-4">
 			<h1 class="text-2xl font-bold text-[var(--color-foreground)]">Fit Check</h1>
 		</div>
 	</div>
 
-	<div class="max-w-md mx-auto px-4 py-6 space-y-6">
+	<div class="mx-auto max-w-md space-y-6 px-4 py-6">
 		{#if isLoading}
-			<!-- Loading State -->
 			<div class="space-y-6">
 				<div class="fitness-card animate-pulse">
-					<div class="h-32 bg-[var(--color-card-hover)] rounded-lg"></div>
+					<div class="h-32 rounded-lg bg-[var(--color-card-hover)]"></div>
 				</div>
 				<div class="grid grid-cols-2 gap-4">
-					<div class="fitness-card animate-pulse h-24"></div>
-					<div class="fitness-card animate-pulse h-24"></div>
+					<div class="fitness-card h-24 animate-pulse"></div>
+					<div class="fitness-card h-24 animate-pulse"></div>
 				</div>
 			</div>
 		{:else}
@@ -141,107 +133,128 @@
 				<div class="fitness-card border-[var(--color-primary)]/40 bg-[var(--color-primary)]/5">
 					<div class="flex items-center justify-between">
 						<div>
-							<p class="text-xs text-[var(--color-primary)] font-semibold uppercase tracking-wide mb-1">Today's Workout</p>
-							<h3 class="text-lg font-semibold text-[var(--color-foreground)]">{scheduledTemplate.name || 'Workout'}</h3>
-							<p class="text-sm text-[var(--color-muted)]">{scheduledTemplate.exercise_count} exercise{scheduledTemplate.exercise_count !== 1 ? 's' : ''}</p>
+							<p class="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-primary)]">
+								Today's Workout
+							</p>
+							<h3 class="text-lg font-semibold text-[var(--color-foreground)]">
+								{scheduledTemplate.name ?? 'Workout'}
+							</h3>
+							<p class="text-sm text-[var(--color-muted)]">
+								{scheduledTemplate.exercise_count}
+								{scheduledTemplate.exercise_count !== 1 ? 'exercises' : 'exercise'}
+							</p>
 						</div>
 						<button
 							onclick={startScheduledWorkout}
-							class="px-4 py-2 bg-[var(--gradient-accent)] text-white font-semibold rounded-lg flex items-center gap-2 flex-shrink-0"
+							class="flex flex-shrink-0 items-center gap-2 rounded-lg bg-[var(--gradient-accent)] px-4 py-2 font-semibold text-white"
 						>
-							<Play class="w-4 h-4" />
+							<Play class="h-4 w-4" />
 							Start
 						</button>
 					</div>
 				</div>
 			{/if}
 
-			<!-- Streak Card - Most Important -->
+			<!-- Streak Card -->
 			<div class="fitness-card relative overflow-hidden">
-				<div class="absolute inset-0 bg-gradient-to-br from-[var(--color-accent)]/20 to-[var(--color-primary)]/20"></div>
+				<div
+					class="absolute inset-0 bg-gradient-to-br from-[var(--color-accent)]/20 to-[var(--color-primary)]/20"
+				></div>
 				<div class="relative">
-					<div class="flex items-center justify-between mb-4">
+					<div class="mb-4 flex items-center justify-between">
 						<div class="flex items-center gap-2">
-							<Flame class="w-6 h-6 text-[var(--color-accent)]" />
+							<Flame class="h-6 w-6 text-[var(--color-accent)]" />
 							<h2 class="text-lg font-semibold text-[var(--color-foreground)]">Current Streak</h2>
 						</div>
 						{#if hasWorkedOutToday}
-							<span class="px-3 py-1 bg-[var(--color-accent)]/20 text-[var(--color-accent)] text-xs font-bold rounded-full">
+							<span
+								class="rounded-full bg-[var(--color-accent)]/20 px-3 py-1 text-xs font-bold text-[var(--color-accent)]"
+							>
 								Today ✓
 							</span>
 						{/if}
 					</div>
-					
-					<div class="flex items-baseline gap-2 mb-2">
-						<span class="text-5xl font-bold text-[var(--color-accent)]">{streakData.currentStreak}</span>
+
+					<div class="mb-2 flex items-baseline gap-2">
+						<span class="text-5xl font-bold text-[var(--color-accent)]"
+							>{streakData.currentStreak}</span
+						>
 						<span class="text-xl text-[var(--color-muted)]">days</span>
 					</div>
-					
-					{#if streakData.currentStreak === 0}
-						<p class="text-sm text-[var(--color-muted)]">
+
+					<p class="text-sm text-[var(--color-muted)]">
+						{#if streakData.currentStreak === 0}
 							{#if daysSince !== null}
-								{daysSince === 0 ? 'Start your streak today!' : `Last workout: ${daysSince} day${daysSince > 1 ? 's' : ''} ago`}
+								{daysSince === 0
+									? 'Start your streak today!'
+									: `Last workout: ${daysSince} day${daysSince > 1 ? 's' : ''} ago`}
 							{:else}
 								Start your fitness journey!
 							{/if}
-						</p>
-					{:else}
-						<p class="text-sm text-[var(--color-muted)]">
+						{:else}
 							Keep it going! 🔥
-						</p>
-					{/if}
+						{/if}
+					</p>
 
-					<div class="mt-4 pt-4 border-t border-[var(--color-border)]">
+					<div class="mt-4 border-t border-[var(--color-border)] pt-4">
 						<div class="flex items-center justify-between text-sm">
 							<span class="text-[var(--color-muted)]">Longest streak</span>
-							<span class="font-semibold text-[var(--color-foreground)]">{streakData.longestStreak} days</span>
+							<span class="font-semibold text-[var(--color-foreground)]"
+								>{streakData.longestStreak} days</span
+							>
 						</div>
 					</div>
 				</div>
 			</div>
 
-			<!-- Quick Stats Grid -->
+			<!-- Quick Stats -->
 			<div class="grid grid-cols-2 gap-4">
-				<!-- Workouts This Week -->
-				<a href="/workouts/history?filter=week" class="fitness-card block hover:scale-[1.02] transition-transform">
-					<div class="flex items-center gap-2 mb-2">
-						<Calendar class="w-5 h-5 text-[var(--color-primary)]" />
+				<a
+					href="/log/history?filter=week"
+					class="fitness-card block transition-transform hover:scale-[1.02]"
+				>
+					<div class="mb-2 flex items-center gap-2">
+						<Calendar class="h-5 w-5 text-[var(--color-primary)]" />
 						<h3 class="text-sm font-semibold text-[var(--color-muted)]">This Week</h3>
 					</div>
 					<p class="text-3xl font-bold text-[var(--color-foreground)]">{workoutsThisWeek}</p>
-					<p class="text-xs text-[var(--color-muted)] mt-1">workouts</p>
+					<p class="mt-1 text-xs text-[var(--color-muted)]">workouts</p>
 				</a>
 
-				<!-- Total Workouts -->
-				<a href="/workouts/history" class="fitness-card block hover:scale-[1.02] transition-transform">
-					<div class="flex items-center gap-2 mb-2">
-						<Activity class="w-5 h-5 text-[var(--color-secondary)]" />
+				<a href="/log/history" class="fitness-card block transition-transform hover:scale-[1.02]">
+					<div class="mb-2 flex items-center gap-2">
+						<Activity class="h-5 w-5 text-[var(--color-secondary)]" />
 						<h3 class="text-sm font-semibold text-[var(--color-muted)]">Total</h3>
 					</div>
 					<p class="text-3xl font-bold text-[var(--color-foreground)]">{totalWorkouts}</p>
-					<p class="text-xs text-[var(--color-muted)] mt-1">workouts</p>
+					<p class="mt-1 text-xs text-[var(--color-muted)]">workouts</p>
 				</a>
 			</div>
 
-			<!-- Start Workout Card - always visible so user can do multiple workouts per day -->
-			<a href="/workouts" class="fitness-card block hover:scale-[1.02] transition-transform">
+			<!-- Start Workout CTA -->
+			<a href="/log" class="fitness-card block transition-transform hover:scale-[1.02]">
 				<div class="flex items-center justify-between">
 					<div>
-						<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-1">Start Workout</h3>
+						<h3 class="mb-1 text-lg font-semibold text-[var(--color-foreground)]">Start Workout</h3>
 						<p class="text-sm text-[var(--color-muted)]">
-							{hasWorkedOutToday ? 'Start another workout' : 'Pick a workout or create new to log for today'}
+							{hasWorkedOutToday ? 'Start another workout' : 'Pick a template or start fresh'}
 						</p>
 					</div>
-					<div class="w-12 h-12 rounded-full bg-[var(--gradient-primary)] flex items-center justify-center">
-						<Activity class="w-6 h-6 text-white" />
+					<div
+						class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-[var(--gradient-primary)]"
+					>
+						<Activity class="h-6 w-6 text-white" />
 					</div>
 				</div>
 			</a>
+
 			{#if hasWorkedOutToday}
 				<div class="fitness-card border-[var(--color-accent)]/50">
 					<div class="flex items-center gap-3">
-						<div class="w-12 h-12 rounded-full bg-[var(--color-accent)]/20 flex items-center justify-center">
-							<Flame class="w-6 h-6 text-[var(--color-accent)]" />
+						<div
+							class="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-accent)]/20"
+						>
+							<Flame class="h-6 w-6 text-[var(--color-accent)]" />
 						</div>
 						<div>
 							<h3 class="text-lg font-semibold text-[var(--color-foreground)]">Great job today!</h3>
@@ -251,25 +264,7 @@
 				</div>
 			{/if}
 
-			<!-- Streak Calendar -->
 			<StreakCalendar />
 		{/if}
 	</div>
 </div>
-
-<style>
-	.fitness-card {
-		background: var(--color-card);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: 1.5rem;
-		transition: all var(--transition-normal);
-	}
-
-	.fitness-card:hover {
-		background: var(--color-card-hover);
-		border-color: var(--color-primary);
-		transform: translateY(-2px);
-		box-shadow: var(--shadow-md);
-	}
-</style>

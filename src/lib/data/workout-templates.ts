@@ -1,26 +1,35 @@
 /**
  * Pre-configured Workout Templates
- * Based on muscle group training plan
+ * Based on muscle group training plan.
+ *
+ * Each template uses slots. A slot is one exercise position.
+ * alternatives[0] is the primary; additional alternatives are fallbacks.
+ * All defaults come from config.ts — no magic numbers inline.
  */
 
 import { getExerciseById, isTimeBased, type Exercise } from './exercises';
-import type { WorkoutExercise } from '$lib/types/workout';
+import { DEFAULT_SETS, DEFAULT_REPS, DEFAULT_REST_BETWEEN_SETS } from './config';
+import type { ActiveWorkoutSlot } from '$lib/stores/active-workout';
 
-export interface WorkoutTemplateExercise {
+export type WorkoutTemplateAlternative = {
 	exerciseId: string;
 	sets: number;
-	reps?: number | string; // Can be "max reps" or number range like "6-8". Not used for time-based exercises.
-	durationSeconds?: number; // For time-based exercises (trackingMode: 'time')
+	reps?: number | string; // number, range like "6-8", or "max reps"
+	durationSeconds?: number; // for time-based exercises
 	restSeconds: number;
 	notes?: string;
-}
+};
+
+export type WorkoutTemplateSlot = {
+	alternatives: WorkoutTemplateAlternative[]; // index 0 = primary
+};
 
 export interface WorkoutTemplate {
 	id: string;
 	name: string;
 	description: string;
 	muscleGroups: string[];
-	exercises: WorkoutTemplateExercise[];
+	slots: WorkoutTemplateSlot[];
 }
 
 export const workoutTemplates: WorkoutTemplate[] = [
@@ -30,329 +39,448 @@ export const workoutTemplates: WorkoutTemplate[] = [
 		name: 'Lower Body',
 		description: 'Six lifts: quads, hamstrings (hip hinge + knee flexion), glutes, calves',
 		muscleGroups: ['quadriceps', 'hamstrings', 'glutes', 'calves'],
-		exercises: [
+		slots: [
 			{
-				exerciseId: 'goblet-squat',
-				sets: 4,
-				reps: '6-8',
-				restSeconds: 120,
-				notes: 'Hold dumbbell at chest, depth you own'
+				alternatives: [
+					{
+						exerciseId: 'goblet-squat',
+						sets: 4,
+						reps: '6-8',
+						restSeconds: 120,
+						notes: 'Hold dumbbell at chest, depth you own'
+					}
+				]
 			},
 			{
-				exerciseId: 'dumbbell-romanian-deadlift',
-				sets: 4,
-				reps: 8,
-				restSeconds: 120,
-				notes: 'Hip hinge; stretch hamstrings, neutral spine'
+				alternatives: [
+					{
+						exerciseId: 'dumbbell-romanian-deadlift',
+						sets: 4,
+						reps: 8,
+						restSeconds: 120,
+						notes: 'Hip hinge; stretch hamstrings, neutral spine'
+					}
+				]
 			},
 			{
-				exerciseId: 'bulgarian-split-squat',
-				sets: 3,
-				reps: 8,
-				restSeconds: 90,
-				notes: 'Each leg — hold dumbbells at sides'
+				alternatives: [
+					{
+						exerciseId: 'bulgarian-split-squat',
+						sets: 3,
+						reps: 8,
+						restSeconds: 90,
+						notes: 'Each leg — hold dumbbells at sides'
+					}
+				]
 			},
 			{
-				exerciseId: 'lunges',
-				sets: 3,
-				reps: '10-12',
-				restSeconds: 90,
-				notes: 'Walking or static; each leg'
+				alternatives: [
+					{
+						exerciseId: 'lunges',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 90,
+						notes: 'Walking or static; each leg'
+					}
+				]
 			},
 			{
-				exerciseId: 'leg-curl',
-				sets: 3,
-				reps: '12-15',
-				restSeconds: 60,
-				notes: 'Lying or seated machine — knee-flexion for hamstrings'
+				alternatives: [
+					{
+						exerciseId: 'leg-curl',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Lying or seated machine — knee-flexion for hamstrings'
+					}
+				]
 			},
 			{
-				exerciseId: 'calf-raise',
-				sets: 3,
-				reps: '12-15',
-				restSeconds: 60,
-				notes: 'Standing; full stretch and squeeze'
+				alternatives: [
+					{
+						exerciseId: 'calf-raise',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Standing; full stretch and squeeze'
+					}
+				]
 			}
 		]
 	},
-	// CORE — balanced daily circuit: upper + lower RA, obliques, TVA, posterior, lateral
+
+	// CORE — balanced daily circuit
 	{
 		id: 'core',
 		name: 'Core',
-		description: 'Balanced 10-move circuit: upper/lower RA, obliques (rotation + lateral), TVA, posterior core, lateral stability',
+		description:
+			'Balanced 10-move circuit: upper/lower RA, obliques (rotation + lateral), TVA, posterior core, lateral stability',
 		muscleGroups: ['core'],
-		exercises: [
+		slots: [
 			{
-				exerciseId: 'butterfly-crunches',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 30,
-				notes: 'Upper RA, no hip flexor cheating'
+				alternatives: [
+					{
+						exerciseId: 'butterfly-crunches',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 30,
+						notes: 'Upper RA, no hip flexor cheating'
+					}
+				]
 			},
 			{
-				exerciseId: 'reverse-crunch-leg-opener',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 30,
-				notes: 'Lower RA'
+				alternatives: [
+					{
+						exerciseId: 'reverse-crunch-leg-opener',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 30,
+						notes: 'Lower RA'
+					}
+				]
 			},
 			{
-				exerciseId: 'leg-lowers',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 45,
-				notes: 'Lower RA + highest TVA anti-extension demand'
+				alternatives: [
+					{
+						exerciseId: 'leg-lowers',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 45,
+						notes: 'Lower RA + highest TVA anti-extension demand'
+					}
+				]
 			},
 			{
-				exerciseId: 'cross-crunches',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 30,
-				notes: 'Obliques (rotation)'
+				alternatives: [
+					{
+						exerciseId: 'cross-crunches',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 30,
+						notes: 'Obliques (rotation)'
+					}
+				]
 			},
 			{
-				exerciseId: 'heel-taps',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 45,
-				notes: 'Obliques (lateral flexion)'
+				alternatives: [
+					{
+						exerciseId: 'heel-taps',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 45,
+						notes: 'Obliques (lateral flexion)'
+					}
+				]
 			},
 			{
-				exerciseId: 'spider-crunches',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 60,
-				notes: 'Highest oblique activation (ACE EMG)'
+				alternatives: [
+					{
+						exerciseId: 'spider-crunches',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 60,
+						notes: 'Highest oblique activation (ACE EMG)'
+					}
+				]
 			},
 			{
-				exerciseId: 'single-leg-extensions',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 30,
-				notes: 'TVA isolation (deep stabiliser)'
+				alternatives: [
+					{
+						exerciseId: 'single-leg-extensions',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 30,
+						notes: 'TVA isolation (deep stabiliser)'
+					}
+				]
 			},
 			{
-				exerciseId: 'plank-knee-tucks',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 30,
-				notes: 'TVA + integrated stability'
+				alternatives: [
+					{
+						exerciseId: 'plank-knee-tucks',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 30,
+						notes: 'TVA + integrated stability'
+					}
+				]
 			},
 			{
-				exerciseId: 'side-plank',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 30,
-				notes: 'Each side — QL + lateral core'
+				alternatives: [
+					{
+						exerciseId: 'side-plank',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 30,
+						notes: 'Each side — QL + lateral core'
+					}
+				]
 			},
 			{
-				exerciseId: 'bird-dog',
-				sets: 1,
-				durationSeconds: 45,
-				restSeconds: 30,
-				notes: 'Posterior core, erectors, multifidus'
+				alternatives: [
+					{
+						exerciseId: 'bird-dog',
+						sets: 1,
+						durationSeconds: 45,
+						restSeconds: 30,
+						notes: 'Posterior core, erectors, multifidus'
+					}
+				]
 			}
 		]
 	},
-	// UPPER PUSH — six moves: chest flat + incline, three delt angles, triceps long head
+
+	// UPPER PUSH — chest flat + incline, three delt angles, triceps long head
 	{
 		id: 'upper-push',
 		name: 'Upper Push',
-		description: 'Chest, shoulders, triceps — six lifts (presses cover mid/upper chest and triceps load)',
+		description:
+			'Chest, shoulders, triceps — six lifts (presses cover mid/upper chest and triceps load)',
 		muscleGroups: ['chest', 'shoulders', 'triceps'],
-		exercises: [
+		slots: [
 			{
-				exerciseId: 'dumbbell-bench-press',
-				sets: 4,
-				reps: '6-8',
-				restSeconds: 120,
-				notes: 'Mid/sternal chest; heavy compound'
+				alternatives: [
+					{
+						exerciseId: 'dumbbell-bench-press',
+						sets: 4,
+						reps: '6-8',
+						restSeconds: 120,
+						notes: 'Mid/sternal chest; heavy compound'
+					}
+				]
 			},
 			{
-				exerciseId: 'incline-dumbbell-bench-press',
-				sets: 3,
-				reps: '8-10',
-				restSeconds: 90,
-				notes: '30–45°; clavicular chest fibers'
+				alternatives: [
+					{
+						exerciseId: 'incline-dumbbell-bench-press',
+						sets: 3,
+						reps: '8-10',
+						restSeconds: 90,
+						notes: '30–45°; clavicular chest fibers'
+					}
+				]
 			},
 			{
-				exerciseId: 'dumbbell-shoulder-press',
-				sets: 3,
-				reps: '6-8',
-				restSeconds: 90,
-				notes: 'Anterior delts; seated or standing'
+				alternatives: [
+					{
+						exerciseId: 'dumbbell-shoulder-press',
+						sets: 3,
+						reps: '6-8',
+						restSeconds: 90,
+						notes: 'Anterior delts; seated or standing'
+					}
+				]
 			},
 			{
-				exerciseId: 'lateral-raises',
-				sets: 3,
-				reps: '12-15',
-				restSeconds: 60,
-				notes: 'Lateral delts'
+				alternatives: [
+					{
+						exerciseId: 'lateral-raises',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Lateral delts'
+					}
+				]
 			},
 			{
-				exerciseId: 'rear-delt-fly',
-				sets: 3,
-				reps: '12-15',
-				restSeconds: 60,
-				notes: 'Posterior delts; bent-over'
+				alternatives: [
+					{
+						exerciseId: 'rear-delt-fly',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Posterior delts; bent-over'
+					}
+				]
 			},
 			{
-				exerciseId: 'overhead-tricep-extension',
-				sets: 3,
-				reps: '10-12',
-				restSeconds: 60,
-				notes: 'Long head of triceps; presses already load lateral/medial heads'
+				alternatives: [
+					{
+						exerciseId: 'overhead-tricep-extension',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Long head of triceps'
+					}
+				]
 			}
 		]
 	},
-	// UPPER PULL — vertical + horizontal + scap work; three curl angles for biceps/brachialis
+
+	// UPPER PULL — vertical + horizontal + scap work; three curl angles
 	{
 		id: 'upper-pull',
 		name: 'Upper Pull',
 		description: 'Back and biceps — vertical pull, row, scap work, then three curl variations',
 		muscleGroups: ['back', 'biceps'],
-		exercises: [
+		slots: [
 			{
-				exerciseId: 'pull-ups',
-				sets: 4,
-				reps: 'max reps',
-				restSeconds: 120,
-				notes: 'Vertical pull — lats; assisted or band if needed'
+				alternatives: [
+					{
+						exerciseId: 'pull-ups',
+						sets: 4,
+						reps: 'max reps',
+						restSeconds: 120,
+						notes: 'Vertical pull — lats; assisted or band if needed'
+					}
+				]
 			},
 			{
-				exerciseId: 'one-arm-dumbbell-row',
-				sets: 4,
-				reps: 8,
-				restSeconds: 90,
-				notes: 'Horizontal pull — thickness, rhomboids, lats'
+				alternatives: [
+					{
+						exerciseId: 'one-arm-dumbbell-row',
+						sets: 4,
+						reps: 8,
+						restSeconds: 90,
+						notes: 'Horizontal pull — thickness, rhomboids, lats'
+					}
+				]
 			},
 			{
-				exerciseId: 'face-pulls',
-				sets: 3,
-				reps: '15-20',
-				restSeconds: 60,
-				notes: 'External rotation at end; rope to face'
+				alternatives: [
+					{
+						exerciseId: 'face-pulls',
+						sets: 3,
+						reps: '15-20',
+						restSeconds: 60,
+						notes: 'External rotation at end; rope to face'
+					}
+				]
 			},
 			{
-				exerciseId: 'hammer-curl',
-				sets: 3,
-				reps: '10-12',
-				restSeconds: 60,
-				notes: 'Brachialis and neutral grip'
+				alternatives: [
+					{
+						exerciseId: 'hammer-curl',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Brachialis and neutral grip'
+					}
+				]
 			},
 			{
-				exerciseId: 'incline-dumbbell-curl',
-				sets: 3,
-				reps: '8-10',
-				restSeconds: 60,
-				notes: 'Arms behind body; long-head emphasis'
+				alternatives: [
+					{
+						exerciseId: 'incline-dumbbell-curl',
+						sets: 3,
+						reps: '8-10',
+						restSeconds: 60,
+						notes: 'Arms behind body; long-head emphasis'
+					}
+				]
 			},
 			{
-				exerciseId: 'dumbbell-curl',
-				sets: 3,
-				reps: '10-12',
-				restSeconds: 60,
-				notes: 'Standing; supinated, full ROM'
+				alternatives: [
+					{
+						exerciseId: 'dumbbell-curl',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Standing; supinated, full ROM'
+					}
+				]
 			}
 		]
 	}
 ];
 
-/**
- * Get all exercises for a template with full exercise details
- */
-export function getTemplateExercises(
-	template: WorkoutTemplate,
-	customExercises: Array<Exercise & { id: string }> = []
-): Array<{
-	exercise: Exercise;
-	sets: number;
-	reps?: number | string;
-	durationSeconds?: number;
-	restSeconds: number;
-	notes?: string;
-}> {
-	return template.exercises
-		.map((templateEx) => {
-			const exercise = getExerciseById(templateEx.exerciseId) || customExercises.find(ce => ce.id === templateEx.exerciseId);
-			if (!exercise) return null;
-			return {
-				exercise,
-				sets: templateEx.sets,
-				reps: templateEx.reps,
-				durationSeconds: templateEx.durationSeconds,
-				restSeconds: templateEx.restSeconds,
-				notes: templateEx.notes
-			};
-		})
-		.filter((ex): ex is NonNullable<typeof ex> => ex !== null);
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function parseReps(reps: number | string | undefined, fallback: number): number {
+	if (reps == null) return fallback;
+	if (typeof reps === 'number') return reps || fallback;
+	if (reps.includes('-')) return Number(reps.split('-')[0]) || fallback;
+	if (reps.toLowerCase().includes('max')) return fallback;
+	return Number(reps) || fallback;
+}
+
+function alternativeToActiveSlot(
+	alt: WorkoutTemplateAlternative,
+	customExercises: Exercise[] = []
+): ActiveWorkoutSlot['alternatives'][number] | null {
+	const exercise =
+		getExerciseById(alt.exerciseId) ||
+		customExercises.find((ce) => ce.id === alt.exerciseId);
+	if (!exercise) return null;
+
+	const restSeconds = alt.restSeconds ?? DEFAULT_REST_BETWEEN_SETS;
+
+	if (exercise.exerciseType === 'cardio') {
+		return {
+			exerciseId: exercise.id,
+			exerciseName: exercise.name,
+			exerciseType: 'cardio',
+			durationMinutes: exercise.defaultDurationMinutes ?? 20,
+			calories: exercise.defaultCalories ?? 0,
+			completed: false
+		};
+	}
+
+	if (exercise.exerciseType === 'stretches') {
+		return {
+			exerciseId: exercise.id,
+			exerciseName: exercise.name,
+			exerciseType: 'stretches',
+			durationSeconds: exercise.defaultDurationSeconds ?? 30,
+			reps: exercise.defaultRepsStretches ?? 3,
+			completed: false
+		};
+	}
+
+	// weights / bodyweight
+	const numSets = alt.sets ?? DEFAULT_SETS;
+	const timeBased = isTimeBased(exercise);
+
+	if (timeBased) {
+		const dur = alt.durationSeconds ?? exercise.defaultDurationSeconds ?? 45;
+		return {
+			exerciseId: exercise.id,
+			exerciseName: exercise.name,
+			exerciseType: exercise.exerciseType as 'weights' | 'bodyweight',
+			sets: Array.from({ length: numSets }, () => ({
+				reps: 0,
+				weight: 0,
+				rest: restSeconds,
+				completed: false,
+				durationSeconds: dur
+			}))
+		};
+	}
+
+	const numReps = parseReps(alt.reps, exercise.defaultReps ?? DEFAULT_REPS);
+	return {
+		exerciseId: exercise.id,
+		exerciseName: exercise.name,
+		exerciseType: exercise.exerciseType as 'weights' | 'bodyweight',
+		sets: Array.from({ length: numSets }, () => ({
+			reps: numReps,
+			weight: 0,
+			rest: restSeconds,
+			completed: false
+		}))
+	};
 }
 
 /**
- * Convert template to workout format
+ * Convert a WorkoutTemplate to ActiveWorkoutSlot[] ready for the active workout store.
  */
-export function templateToWorkoutExercises(
+export function templateToActiveSlots(
 	template: WorkoutTemplate,
-	customExercises: Array<Exercise & { id: string }> = []
-): WorkoutExercise[] {
-	return getTemplateExercises(template, customExercises).map(({ exercise, sets, reps, durationSeconds, restSeconds }) => {
-		if (exercise.exerciseType === 'cardio') {
-			return {
-				exercise,
-				exerciseType: 'cardio' as const,
-				durationMinutes: exercise.defaultDurationMinutes || 30,
-				calories: exercise.defaultCalories || 300,
-				completed: false
-			};
-		} else if (exercise.exerciseType === 'stretches') {
-			return {
-				exercise,
-				exerciseType: 'stretches' as const,
-				durationSeconds: exercise.defaultDurationSeconds || 60,
-				reps: exercise.defaultRepsStretches || 10,
-				completed: false
-			};
-		} else if (isTimeBased(exercise)) {
-			// Time-based weights/bodyweight
-			const setDuration = durationSeconds ?? exercise.defaultDurationSeconds ?? 45;
-			return {
-				exercise,
-				exerciseType: exercise.exerciseType === 'bodyweight' ? ('bodyweight' as const) : ('weights' as const),
-				sets: Array.from({ length: sets || exercise.defaultSets || 1 }, () => ({
-					reps: 0,
-					weight: 0,
-					rest: restSeconds || exercise.defaultRestSeconds || 30,
-					completed: false,
-					durationSeconds: setDuration
-				}))
-			};
-		} else {
-			// Weights or bodyweight — reps-based
-			// Parse reps - handle "6-8", "max reps", or number
-			let defaultReps = exercise.defaultReps || 10;
-			if (typeof reps === 'string') {
-				if (reps.includes('-')) {
-					// Take the lower number for default
-					const [min] = reps.split('-').map(Number);
-					defaultReps = min || exercise.defaultReps || 10;
-				} else if (reps.toLowerCase().includes('max')) {
-					// Use exercise default for max reps
-					defaultReps = exercise.defaultReps || 10;
-				}
-			} else if (reps != null) {
-				defaultReps = reps || exercise.defaultReps || 10;
-			}
+	customExercises: Exercise[] = []
+): ActiveWorkoutSlot[] {
+	return template.slots
+		.map((slot): ActiveWorkoutSlot | null => {
+			const alts = slot.alternatives
+				.map((alt) => alternativeToActiveSlot(alt, customExercises))
+				.filter((a): a is NonNullable<typeof a> => a !== null);
+
+			if (alts.length === 0) return null;
 
 			return {
-				exercise,
-				exerciseType: exercise.exerciseType === 'bodyweight' ? ('bodyweight' as const) : ('weights' as const),
-				sets: Array.from({ length: sets || exercise.defaultSets || 3 }, () => ({
-					reps: defaultReps,
-					weight: 0,
-					rest: restSeconds || exercise.defaultRestSeconds || 60,
-					completed: false
-				}))
+				alternatives: alts,
+				// Single-alternative slots are auto-chosen; multi-alternative slots wait for user pick
+				chosenIndex: alts.length === 1 ? 0 : null
 			};
-		}
-	});
+		})
+		.filter((s): s is ActiveWorkoutSlot => s !== null);
 }

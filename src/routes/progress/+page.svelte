@@ -1,41 +1,40 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase/client';
 	import { getExerciseById } from '$lib/data/exercises';
 	import { calculateExerciseProgress, getPersonalRecords, type ExerciseProgress } from '$lib/utils/progress';
-	import StrengthChart from '$lib/components/StrengthChart.svelte';
 	import VolumeTrendChart from '$lib/components/VolumeTrendChart.svelte';
 	import MuscleGroupChart from '$lib/components/MuscleGroupChart.svelte';
-	import { TrendingUp, Award, Activity, ExternalLink } from 'lucide-svelte';
+	import { TrendingUp, Award, Activity, Dumbbell, ChevronRight } from 'lucide-svelte';
 	import { unitPreference } from '$lib/stores/unit-preference';
 	import { loadCustomExercises } from '$lib/services/exercises';
 	import { formatWeight } from '$lib/utils/weight-conversion';
 
-	let selectedExerciseId = $state<string | null>(null);
-	let exerciseProgress = $state<ExerciseProgress | null>(null);
-	let personalRecords = $state<Array<{ exerciseName: string; weight: number; reps: number; date: Date }>>([]);
-	let isLoading = $state(true);
-	let chartType = $state<'weight' | 'volume'>('weight');
+	type LiftCard = {
+		id: string;
+		name: string;
+		progress: ExerciseProgress;
+	};
 
-	// Get exercises that have been used in workouts
-	let usedExercises = $state<Array<{ id: string; name: string }>>([]);
-	let exerciseMap = $state<Map<string, Array<{ date: string; sets: any }>>>(new Map());
-	
-	// Custom exercises from database
-	let customExercises = $state<Array<{ id: string; name: string; isCustom: boolean }>>([]);
+	let isLoading = $state(true);
+	let liftCards = $state<LiftCard[]>([]);
+	let personalRecords = $state<Array<{ exerciseName: string; weight: number; reps: number; date: Date; exerciseId?: string }>>([]);
+	let todayPR = $state<{ exerciseName: string; weight: number; reps: number; exerciseId?: string } | null>(null);
 
 	const currentUnit = $derived($unitPreference);
 
+	const today = new Date().toDateString();
+
 	onMount(async () => {
-		customExercises = await loadCustomExercises();
-		await loadProgressData();
+		const customExercises = await loadCustomExercises();
+		await loadProgressData(customExercises);
 	});
 
-	async function loadProgressData() {
+	async function loadProgressData(customExercises: Array<{ id: string; name: string; isCustom: boolean }>) {
 		try {
 			isLoading = true;
 
-			// Fetch all workouts first
 			const { data: workouts, error: workoutsError } = await supabase
 				.from('workouts')
 				.select('id, date')
@@ -43,7 +42,6 @@
 
 			if (workoutsError) throw workoutsError;
 
-			// Fetch all workout exercises
 			const { data: workoutExercises, error } = await supabase
 				.from('workout_exercises')
 				.select('exercise_id, workout_id, sets')
@@ -51,262 +49,227 @@
 
 			if (error) throw error;
 
-			// Create workout date lookup
 			const workoutDateMap = new Map<string, string>();
-			(workouts || []).forEach((w: any) => {
-				workoutDateMap.set(w.id, w.date);
-			});
+			(workouts || []).forEach((w: any) => workoutDateMap.set(w.id, w.date));
 
-			// Group by exercise
-			const map = new Map<string, Array<{ date: string; sets: any }>>();
-
+			const exerciseMap = new Map<string, Array<{ date: string; sets: any }>>();
 			(workoutExercises || []).forEach((we: any) => {
-				const workoutDate = workoutDateMap.get(we.workout_id);
-				if (!workoutDate) return;
-
-				if (!map.has(we.exercise_id)) {
-					map.set(we.exercise_id, []);
-				}
-				map.get(we.exercise_id)!.push({
-					date: workoutDate,
-					sets: we.sets
-				});
+				const date = workoutDateMap.get(we.workout_id);
+				if (!date) return;
+				if (!exerciseMap.has(we.exercise_id)) exerciseMap.set(we.exercise_id, []);
+				exerciseMap.get(we.exercise_id)!.push({ date, sets: we.sets });
 			});
 
-			exerciseMap = map;
-
-			// Get unique exercises (from both default and custom)
-			usedExercises = Array.from(map.keys())
-				.map((id) => {
-					const exercise = getExerciseById(id) || customExercises.find(ce => ce.id === id);
-					return exercise ? { id, name: exercise.name } : null;
-				})
-				.filter((e): e is { id: string; name: string } => e !== null)
-				.sort((a, b) => a.name.localeCompare(b.name));
-
-			// Calculate personal records
+			// Build lift cards sorted by most recently used
+			const cards: LiftCard[] = [];
 			const allProgress: ExerciseProgress[] = [];
-			map.forEach((workouts, exerciseId) => {
-				const exercise = getExerciseById(exerciseId) || customExercises.find(ce => ce.id === exerciseId);
-				if (exercise) {
-					const progress = calculateExerciseProgress(exerciseId, exercise.name, workouts);
-					if (progress.dates.length > 0) {
-						allProgress.push(progress);
-					}
-				}
+
+			// Sort exercise ids by most recent workout date
+			const exerciseIds = Array.from(exerciseMap.keys());
+			exerciseIds.sort((a, b) => {
+				const aLast = exerciseMap.get(a)?.at(-1)?.date ?? '';
+				const bLast = exerciseMap.get(b)?.at(-1)?.date ?? '';
+				return bLast.localeCompare(aLast);
 			});
 
-			personalRecords = getPersonalRecords(allProgress);
-
-			// Set first exercise as default if available
-			if (usedExercises.length > 0 && !selectedExerciseId) {
-				selectedExerciseId = usedExercises[0].id;
+			for (const id of exerciseIds) {
+				const exercise = getExerciseById(id) || customExercises.find((ce) => ce.id === id);
+				if (!exercise) continue;
+				const data = exerciseMap.get(id) || [];
+				const progress = calculateExerciseProgress(id, exercise.name, data);
+				if (progress.dates.length > 0) {
+					cards.push({ id, name: exercise.name, progress });
+					allProgress.push(progress);
+				}
 			}
 
-			// Load selected exercise progress
-			if (selectedExerciseId) {
-				loadExerciseProgress(selectedExerciseId);
-			}
-		} catch (error) {
-			console.error('Error loading progress data:', error);
+			liftCards = cards;
+
+			// Personal records sorted by date desc
+			const prs = getPersonalRecords(allProgress).map((pr) => ({
+				...pr,
+				exerciseId: cards.find((c) => c.name === pr.exerciseName)?.id
+			}));
+			personalRecords = prs;
+
+			// Check for PR hit today
+			const todayEntry = prs.find((pr) => pr.date.toDateString() === today);
+			todayPR = todayEntry ?? null;
+		} catch (err) {
+			console.error('Error loading progress data:', err);
 		} finally {
 			isLoading = false;
 		}
 	}
 
-	function loadExerciseProgress(exerciseId: string) {
-		const workouts = exerciseMap.get(exerciseId) || [];
-		const exercise = getExerciseById(exerciseId) || customExercises.find(ce => ce.id === exerciseId);
-		if (exercise) {
-			exerciseProgress = calculateExerciseProgress(exerciseId, exercise.name, workouts);
-		} else {
-			exerciseProgress = null;
-		}
+	/** Build a tiny polyline path for SVG sparkline from last N weight values */
+	function sparklinePath(weights: number[], width = 80, height = 28): string {
+		const pts = weights.slice(-6);
+		if (pts.length < 2) return '';
+		const min = Math.min(...pts);
+		const max = Math.max(...pts);
+		const range = max - min || 1;
+		return pts
+			.map((w, i) => {
+				const x = (i / (pts.length - 1)) * width;
+				const y = height - ((w - min) / range) * height;
+				return `${x.toFixed(1)},${y.toFixed(1)}`;
+			})
+			.join(' ');
 	}
-
-	$effect(() => {
-		if (selectedExerciseId && exerciseMap.size > 0) {
-			// Update progress when exercise changes
-			loadExerciseProgress(selectedExerciseId);
-		}
-	});
 </script>
 
 <svelte:head>
-	<title>Progress - Fit Check</title>
+	<title>Progress — Fit Check</title>
 </svelte:head>
 
-<div class="min-h-screen bg-[var(--color-background)] pb-20">
+<div class="min-h-screen bg-[var(--color-background)] pb-24">
 	<!-- Header -->
-	<div class="sticky top-0 z-10 bg-[var(--color-background)]/95 backdrop-blur-sm border-b border-[var(--color-border)]">
-		<div class="max-w-md mx-auto px-4 py-4">
-			<h1 class="text-2xl font-bold text-[var(--color-foreground)] mb-4">Progress</h1>
+	<div class="sticky top-0 z-10 border-b border-[var(--color-border)] bg-[var(--color-background)]/95 backdrop-blur-sm">
+		<div class="mx-auto max-w-md px-4 py-4">
+			<h1 class="text-2xl font-bold text-[var(--color-foreground)]">Progress</h1>
 		</div>
 	</div>
 
-	<div class="max-w-md mx-auto px-4 py-6 space-y-6">
+	<div class="mx-auto max-w-md px-4 py-6 space-y-8">
 		{#if isLoading}
-			<div class="fitness-card animate-pulse">
-				<div class="h-64 bg-[var(--color-card-hover)] rounded-lg"></div>
+			<div class="grid grid-cols-2 gap-3">
+				{#each [1,2,3,4,5,6] as _}
+					<div class="fitness-card h-28 animate-pulse"></div>
+				{/each}
 			</div>
-		{:else if usedExercises.length === 0}
-			<div class="fitness-card text-center py-12">
-				<Activity class="w-12 h-12 text-[var(--color-muted)] mx-auto mb-3 opacity-50" />
-				<p class="text-[var(--color-muted)] mb-4">No workout data yet</p>
-				<a href="/workout/new" class="inline-block px-6 py-2 bg-[var(--gradient-primary)] text-white font-semibold rounded-lg">
+		{:else if liftCards.length === 0}
+			<div class="fitness-card py-16 text-center">
+				<Dumbbell class="mx-auto mb-3 h-12 w-12 text-[var(--color-muted)] opacity-40" />
+				<p class="mb-4 text-[var(--color-muted)]">No workout data yet</p>
+				<a
+					href="/log"
+					class="inline-block rounded-lg bg-[var(--color-primary)] px-6 py-2 font-semibold text-white"
+				>
 					Start Your First Workout
 				</a>
 			</div>
 		{:else}
-			<!-- Personal Records -->
-			{#if personalRecords.length > 0}
-				<div>
-					<div class="flex items-center gap-2 mb-4">
-						<Award class="w-5 h-5 text-[var(--color-primary)]" />
-						<h2 class="text-lg font-semibold text-[var(--color-foreground)]">Personal Records</h2>
-					</div>
-					<div class="space-y-2">
-						{#each personalRecords.slice(0, 5) as pr}
-							{@const prExId = usedExercises.find((e) => e.name === pr.exerciseName)?.id}
-							<div class="fitness-card">
-								<div class="flex items-center justify-between">
-									<div>
-										{#if prExId}
-											<a href="/progress/{prExId}" class="font-semibold text-[var(--color-foreground)] hover:text-[var(--color-primary)] transition-colors">
-												{pr.exerciseName}
-											</a>
-										{:else}
-											<h3 class="font-semibold text-[var(--color-foreground)]">{pr.exerciseName}</h3>
-										{/if}
-										<p class="text-sm text-[var(--color-muted)]">
-											{pr.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-										</p>
-									</div>
-									<div class="text-right">
-										<p class="text-xl font-bold text-[var(--color-primary)]">
-											{formatWeight(pr.weight, currentUnit)}
-										</p>
-										<p class="text-sm text-[var(--color-muted)]">{pr.reps} reps</p>
-									</div>
-								</div>
-							</div>
-						{/each}
+			<!-- PR hit today banner -->
+			{#if todayPR}
+				<div
+					class="relative overflow-hidden rounded-xl border border-[var(--color-primary)]/40 bg-[var(--color-primary)]/10 px-4 py-4"
+				>
+					<div class="flex items-center gap-3">
+						<div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/20">
+							<Award class="h-5 w-5 text-[var(--color-primary)]" />
+						</div>
+						<div class="min-w-0 flex-1">
+							<p class="text-xs font-semibold uppercase tracking-widest text-[var(--color-primary)]">New PR Today!</p>
+							<p class="font-semibold text-[var(--color-foreground)]">{todayPR.exerciseName}</p>
+							<p class="text-sm text-[var(--color-muted)]">
+								{formatWeight(todayPR.weight, currentUnit)} × {todayPR.reps} reps
+							</p>
+						</div>
+						{#if todayPR.exerciseId}
+							<a
+								href="/progress/{todayPR.exerciseId}"
+								class="flex-shrink-0 rounded-lg border border-[var(--color-primary)]/30 px-3 py-1.5 text-xs font-medium text-[var(--color-primary)]"
+							>
+								View
+							</a>
+						{/if}
 					</div>
 				</div>
 			{/if}
 
-			<!-- Exercise Selection -->
-			<div>
-				<h2 class="text-lg font-semibold text-[var(--color-foreground)] mb-4">Strength Progression</h2>
-				<select
-					bind:value={selectedExerciseId}
-					class="w-full px-4 py-3 bg-[var(--color-card)] border border-[var(--color-border)] rounded-lg text-[var(--color-foreground)] focus:outline-none focus:border-[var(--color-primary)] mb-2"
-				>
-					{#each usedExercises as ex}
-						<option value={ex.id}>{ex.name}</option>
+			<!-- Your Lifts grid -->
+			<section>
+				<div class="mb-4 flex items-center gap-2">
+					<TrendingUp class="h-5 w-5 text-[var(--color-primary)]" />
+					<h2 class="text-lg font-semibold text-[var(--color-foreground)]">Your Lifts</h2>
+					<span class="ml-auto text-xs text-[var(--color-muted)]">{liftCards.length} tracked</span>
+				</div>
+				<div class="grid grid-cols-2 gap-3">
+					{#each liftCards as card}
+						{@const pts = sparklinePath(card.progress.weights)}
+						<button
+							onclick={() => goto(`/progress/${card.id}`)}
+							class="fitness-card group relative text-left transition-all hover:border-[var(--color-primary)]/60 active:scale-[0.97]"
+						>
+							<p class="mb-1 truncate text-sm font-semibold text-[var(--color-foreground)]">{card.name}</p>
+							{#if card.progress.personalRecord}
+								<p class="text-lg font-bold text-[var(--color-primary)]">
+									{formatWeight(card.progress.personalRecord.weight, currentUnit)}
+								</p>
+								<p class="text-xs text-[var(--color-muted)]">{card.progress.personalRecord.reps} reps PR</p>
+							{:else}
+								<p class="text-xs text-[var(--color-muted)]">No weight data</p>
+							{/if}
+							<!-- Sparkline -->
+							{#if pts}
+								<svg
+									viewBox="0 0 80 28"
+									class="mt-2 w-full"
+									preserveAspectRatio="none"
+									aria-hidden="true"
+								>
+									<polyline
+										points={pts}
+										fill="none"
+										stroke="var(--color-primary)"
+										stroke-width="1.5"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										opacity="0.7"
+									/>
+								</svg>
+							{/if}
+							<ChevronRight
+								class="absolute right-2 top-2 h-3.5 w-3.5 text-[var(--color-muted)] opacity-0 transition-opacity group-hover:opacity-100"
+							/>
+						</button>
 					{/each}
-				</select>
-				{#if selectedExerciseId}
-					<a
-						href="/progress/{selectedExerciseId}"
-						class="inline-flex items-center gap-1 text-sm text-[var(--color-primary)] hover:underline mb-4"
-					>
-						<ExternalLink class="w-3 h-3" />
-						View full progress page
-					</a>
-				{/if}
+				</div>
+			</section>
 
-				{#if exerciseProgress && exerciseProgress.dates.length > 0}
-					<!-- Chart Type Toggle -->
-					<div class="flex gap-2 mb-4">
-						<button
-							onclick={() => (chartType = 'weight')}
-							class="flex-1 px-4 py-2 rounded-lg font-medium transition-colors {chartType === 'weight'
-								? 'bg-[var(--color-primary)] text-white'
-								: 'bg-[var(--color-card)] text-[var(--color-muted)] border border-[var(--color-border)]'}"
-						>
-							Max Weight
-						</button>
-						<button
-							onclick={() => (chartType = 'volume')}
-							class="flex-1 px-4 py-2 rounded-lg font-medium transition-colors {chartType === 'volume'
-								? 'bg-[var(--color-secondary)] text-white'
-								: 'bg-[var(--color-card)] text-[var(--color-muted)] border border-[var(--color-border)]'}"
-						>
-							Volume
-						</button>
+			<!-- Personal Records list -->
+			{#if personalRecords.length > 0}
+				<section>
+					<div class="mb-4 flex items-center gap-2">
+						<Award class="h-5 w-5 text-[var(--color-primary)]" />
+						<h2 class="text-lg font-semibold text-[var(--color-foreground)]">Personal Records</h2>
 					</div>
-
-					<!-- Chart -->
-					<div class="fitness-card">
-						<h3 class="text-lg font-semibold text-[var(--color-foreground)] mb-4">
-							{exerciseProgress.exerciseName}
-						</h3>
-						<StrengthChart progress={exerciseProgress} type={chartType} unit={currentUnit} />
+					<div class="space-y-2">
+						{#each personalRecords.slice(0, 5) as pr}
+							<button
+								onclick={() => pr.exerciseId && goto(`/progress/${pr.exerciseId}`)}
+								class="fitness-card w-full text-left transition-all hover:border-[var(--color-primary)]/40"
+							>
+								<div class="flex items-center justify-between">
+									<div class="min-w-0 flex-1">
+										<p class="font-semibold text-[var(--color-foreground)]">{pr.exerciseName}</p>
+										<p class="text-xs text-[var(--color-muted)]">
+											{pr.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+										</p>
+									</div>
+									<div class="text-right">
+										<p class="text-lg font-bold text-[var(--color-primary)]">
+											{formatWeight(pr.weight, currentUnit)}
+										</p>
+										<p class="text-xs text-[var(--color-muted)]">{pr.reps} reps</p>
+									</div>
+								</div>
+							</button>
+						{/each}
 					</div>
+				</section>
+			{/if}
 
-					<!-- Stats -->
-					{#if exerciseProgress.personalRecord}
-						<div class="fitness-card">
-							<div class="flex items-center gap-2 mb-4">
-								<TrendingUp class="w-5 h-5 text-[var(--color-accent)]" />
-								<h3 class="font-semibold text-[var(--color-foreground)]">Personal Record</h3>
-							</div>
-							<div class="space-y-2">
-								<div class="flex justify-between">
-									<span class="text-[var(--color-muted)]">Max Weight</span>
-									<span class="font-bold text-[var(--color-foreground)]">
-										{formatWeight(exerciseProgress.personalRecord.weight, currentUnit)}
-									</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-[var(--color-muted)]">Reps</span>
-									<span class="font-bold text-[var(--color-foreground)]">
-										{exerciseProgress.personalRecord.reps}
-									</span>
-								</div>
-								<div class="flex justify-between">
-									<span class="text-[var(--color-muted)]">Date</span>
-									<span class="font-bold text-[var(--color-foreground)]">
-										{exerciseProgress.personalRecord.date.toLocaleDateString('en-US', {
-											month: 'short',
-											day: 'numeric',
-											year: 'numeric'
-										})}
-									</span>
-								</div>
-							</div>
-						</div>
-					{/if}
-				{:else if selectedExerciseId}
-					<div class="fitness-card text-center py-8">
-						<p class="text-[var(--color-muted)]">No data for this exercise yet</p>
-					</div>
-				{/if}
-			</div>
-
-			<!-- Volume Trends -->
-			<VolumeTrendChart />
-
-			<!-- Muscle Group Distribution -->
-			<MuscleGroupChart />
+			<!-- Volume & Muscle Group -->
+			<section class="space-y-4">
+				<div class="flex items-center gap-2">
+					<Activity class="h-5 w-5 text-[var(--color-primary)]" />
+					<h2 class="text-lg font-semibold text-[var(--color-foreground)]">Volume & Distribution</h2>
+				</div>
+				<VolumeTrendChart />
+				<MuscleGroupChart />
+			</section>
 		{/if}
 	</div>
 </div>
-
-<style>
-	.fitness-card {
-		background: var(--color-card);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: 1.5rem;
-		transition: all var(--transition-normal);
-	}
-
-	.fitness-card:hover {
-		background: var(--color-card-hover);
-		border-color: var(--color-primary);
-		transform: translateY(-2px);
-		box-shadow: var(--shadow-md);
-	}
-</style>

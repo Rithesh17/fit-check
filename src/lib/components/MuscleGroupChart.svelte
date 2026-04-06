@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
+	import { Chart, ArcElement, DoughnutController, Tooltip, Legend } from 'chart.js';
 	import { supabase } from '$lib/supabase/client';
 	import { getExerciseById } from '$lib/data/exercises';
 	import { loadCustomExercises, type CustomExercise } from '$lib/services/exercises';
+	import { getChartTheme } from '$lib/utils/chart-theme';
 
 	let muscleGroupData = $state<Map<string, number>>(new Map());
 	let isLoading = $state(true);
@@ -70,8 +71,7 @@
 			chartInstance.destroy();
 		}
 
-		// Register Chart.js components
-		Chart.register(ArcElement, Tooltip, Legend);
+		Chart.register(DoughnutController, ArcElement, Tooltip, Legend);
 
 		const labels = Array.from(muscleGroupData.keys());
 		const data = Array.from(muscleGroupData.values());
@@ -89,6 +89,8 @@
 			'#3498db',
 			'#e74c3c'
 		];
+
+		const t = getChartTheme();
 
 		chartInstance = new Chart(chartCanvas, {
 			type: 'doughnut',
@@ -108,16 +110,18 @@
 					legend: {
 						position: 'bottom',
 						labels: {
-							color: 'var(--color-foreground)',
+							color: t.foreground,
 							font: { size: 11 },
-							padding: 12
+							padding: 12,
+							boxWidth: 12,
+							boxHeight: 12
 						}
 					},
 					tooltip: {
-						backgroundColor: 'var(--color-card)',
-						titleColor: 'var(--color-foreground)',
-						bodyColor: 'var(--color-foreground)',
-						borderColor: 'var(--color-border)',
+						backgroundColor: t.card,
+						titleColor: t.foreground,
+						bodyColor: t.foreground,
+						borderColor: t.border,
 						borderWidth: 1,
 						padding: 12
 					}

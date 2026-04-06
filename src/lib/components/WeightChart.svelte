@@ -13,6 +13,7 @@
 		Filler
 	} from 'chart.js';
 	import { convertWeight, getWeightUnitLabel, type WeightUnit } from '$lib/utils/weight-conversion';
+	import { getChartTheme } from '$lib/utils/chart-theme';
 
 	interface WeightData {
 		date: string;
@@ -63,6 +64,7 @@
 
 		const weights = weightData.map((d) => d.weight);
 		const unitLabel = getWeightUnitLabel(unit);
+		const t = getChartTheme();
 
 		chartInstance = new Chart(chartCanvas, {
 			type: 'line',
@@ -92,10 +94,10 @@
 						display: false
 					},
 					tooltip: {
-						backgroundColor: 'var(--color-card)',
-						titleColor: 'var(--color-foreground)',
-						bodyColor: 'var(--color-foreground)',
-						borderColor: 'var(--color-border)',
+						backgroundColor: t.card,
+						titleColor: t.foreground,
+						bodyColor: t.foreground,
+						borderColor: t.border,
 						borderWidth: 1,
 						padding: 12,
 						displayColors: false

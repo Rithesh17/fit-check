@@ -16,6 +16,7 @@
 	import { supabase } from '$lib/supabase/client';
 	import { convertWeight, getWeightUnitLabel, type WeightUnit } from '$lib/utils/weight-conversion';
 	import { unitPreference } from '$lib/stores/unit-preference';
+	import { getChartTheme, hexToRgba } from '$lib/utils/chart-theme';
 
 	let volumes = $state<WorkoutVolume[]>([]);
 	let isLoading = $state(true);
@@ -107,6 +108,7 @@
 		const labels = volumes.map((v) => v.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
 		const data = volumes.map((v) => convertWeight(v.totalVolume, currentUnit));
 		const unitLabel = getWeightUnitLabel(currentUnit);
+		const t = getChartTheme();
 
 		chartInstance = new Chart(chartCanvas, {
 			type: 'line',
@@ -116,14 +118,14 @@
 					{
 						label: `Total Volume (${unitLabel})`,
 						data,
-						borderColor: 'var(--color-primary)',
-						backgroundColor: 'rgba(255, 107, 53, 0.1)',
+						borderColor: t.primary,
+						backgroundColor: hexToRgba(t.primary, 0.18),
 						fill: true,
 						tension: 0.4,
 						pointRadius: 4,
 						pointHoverRadius: 6,
-						pointBackgroundColor: 'var(--color-primary)',
-						pointBorderColor: '#000',
+						pointBackgroundColor: t.primary,
+						pointBorderColor: t.background,
 						pointBorderWidth: 2
 					}
 				]
@@ -136,10 +138,10 @@
 						display: false
 					},
 					tooltip: {
-						backgroundColor: 'var(--color-card)',
-						titleColor: 'var(--color-foreground)',
-						bodyColor: 'var(--color-foreground)',
-						borderColor: 'var(--color-border)',
+						backgroundColor: t.card,
+						titleColor: t.foreground,
+						bodyColor: t.foreground,
+						borderColor: t.border,
 						borderWidth: 1,
 						padding: 12,
 						displayColors: false
@@ -151,10 +153,10 @@
 							display: false
 						},
 						grid: {
-							color: 'var(--color-border)'
+							color: hexToRgba(t.foreground, 0.08)
 						},
 						ticks: {
-							color: 'var(--color-muted)',
+							color: t.muted,
 							font: { size: 11 }
 						}
 					},
@@ -163,10 +165,10 @@
 							display: false
 						},
 						grid: {
-							color: 'var(--color-border)'
+							color: hexToRgba(t.foreground, 0.08)
 						},
 						ticks: {
-							color: 'var(--color-muted)',
+							color: t.muted,
 							font: { size: 11 }
 						}
 					}

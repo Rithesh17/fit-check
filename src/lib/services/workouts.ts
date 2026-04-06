@@ -1,4 +1,5 @@
 import { supabase } from '$lib/supabase/client';
+import { WORKOUT_HISTORY_PAGE_SIZE } from '$lib/data/config';
 
 export interface WorkoutInsert {
 	name: string;
@@ -74,8 +75,6 @@ export interface WorkoutPage {
 	hasMore: boolean;
 }
 
-const PAGE_SIZE = 20;
-
 export async function loadWorkoutPage(
 	page: number,
 	filter: 'all' | 'week' = 'all'
@@ -84,7 +83,7 @@ export async function loadWorkoutPage(
 		.from('workouts')
 		.select('id, name, date, duration_minutes, workout_exercises(count)')
 		.order('date', { ascending: false })
-		.range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+		.range(page * WORKOUT_HISTORY_PAGE_SIZE, (page + 1) * WORKOUT_HISTORY_PAGE_SIZE);
 
 	if (filter === 'week') {
 		const weekStart = new Date();
@@ -98,14 +97,14 @@ export async function loadWorkoutPage(
 
 	const rows = data || [];
 	return {
-		workouts: rows.slice(0, PAGE_SIZE).map((w: any) => ({
+		workouts: rows.slice(0, WORKOUT_HISTORY_PAGE_SIZE).map((w: any) => ({
 			id: w.id,
 			name: w.name,
 			date: w.date,
 			duration_minutes: w.duration_minutes,
 			exercise_count: Array.isArray(w.workout_exercises) ? w.workout_exercises.length : 0
 		})),
-		hasMore: rows.length > PAGE_SIZE
+		hasMore: rows.length > WORKOUT_HISTORY_PAGE_SIZE
 	};
 }
 

@@ -136,12 +136,12 @@
 	<title>{workout?.name || 'Workout'} - Fit Check</title>
 </svelte:head>
 
-<div class="min-h-screen bg-[var(--color-background)] pb-20">
+<div class="min-h-screen bg-[var(--color-background)] pb-24">
 	<!-- Header -->
 	<div class="sticky top-0 z-10 bg-[var(--color-background)]/95 backdrop-blur-sm border-b border-[var(--color-border)]">
 		<div class="max-w-md mx-auto px-4 py-4">
 			<div class="flex items-center gap-3 mb-4">
-				<button onclick={() => goto('/')} class="text-[var(--color-muted)] hover:text-[var(--color-foreground)]">
+				<button onclick={() => goto('/log/history')} class="text-[var(--color-muted)] hover:text-[var(--color-foreground)]">
 					<ArrowLeft class="w-6 h-6" />
 				</button>
 				<h1 class="text-xl font-bold text-[var(--color-foreground)] flex-1">
@@ -317,19 +317,3 @@
 	</div>
 </div>
 
-<style>
-	.fitness-card {
-		background: var(--color-card);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: 1.5rem;
-		transition: all var(--transition-normal);
-	}
-
-	.fitness-card:hover {
-		background: var(--color-card-hover);
-		border-color: var(--color-primary);
-		transform: translateY(-2px);
-		box-shadow: var(--shadow-md);
-	}
-</style>

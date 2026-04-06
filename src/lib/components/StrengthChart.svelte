@@ -14,6 +14,7 @@
 	} from 'chart.js';
 	import type { ExerciseProgress } from '$lib/utils/progress';
 	import { convertWeight, getWeightUnitLabel, type WeightUnit } from '$lib/utils/weight-conversion';
+	import { getChartTheme, hexToRgba } from '$lib/utils/chart-theme';
 
 	let { progress, type = 'weight', unit = 'kg' }: { progress: ExerciseProgress; type?: 'weight' | 'volume'; unit?: WeightUnit } = $props();
 
@@ -52,7 +53,8 @@
 			: progress.volumes.map(v => convertWeight(v, unit));
 		const unitLabel = getWeightUnitLabel(unit);
 		const label = type === 'weight' ? `Max Weight (${unitLabel})` : `Volume (${unitLabel})`;
-		const color = type === 'weight' ? 'var(--color-primary)' : 'var(--color-secondary)';
+		const t = getChartTheme();
+		const lineColor = type === 'weight' ? t.primary : t.secondary;
 
 		chartInstance = new Chart(chartCanvas, {
 			type: 'line',
@@ -62,14 +64,14 @@
 					{
 						label,
 						data,
-						borderColor: color,
-						backgroundColor: color + '40',
+						borderColor: lineColor,
+						backgroundColor: hexToRgba(lineColor, 0.2),
 						fill: true,
 						tension: 0.4,
 						pointRadius: 4,
 						pointHoverRadius: 6,
-						pointBackgroundColor: color,
-						pointBorderColor: '#000',
+						pointBackgroundColor: lineColor,
+						pointBorderColor: t.background,
 						pointBorderWidth: 2
 					}
 				]
@@ -82,10 +84,10 @@
 						display: false
 					},
 					tooltip: {
-						backgroundColor: 'var(--color-card)',
-						titleColor: 'var(--color-foreground)',
-						bodyColor: 'var(--color-foreground)',
-						borderColor: 'var(--color-border)',
+						backgroundColor: t.card,
+						titleColor: t.foreground,
+						bodyColor: t.foreground,
+						borderColor: t.border,
 						borderWidth: 1,
 						padding: 12,
 						displayColors: false
@@ -97,10 +99,10 @@
 							display: false
 						},
 						grid: {
-							color: 'var(--color-border)'
+							color: hexToRgba(t.foreground, 0.08)
 						},
 						ticks: {
-							color: 'var(--color-muted)',
+							color: t.muted,
 							font: {
 								size: 11
 							}
@@ -111,10 +113,10 @@
 							display: false
 						},
 						grid: {
-							color: 'var(--color-border)'
+							color: hexToRgba(t.foreground, 0.08)
 						},
 						ticks: {
-							color: 'var(--color-muted)',
+							color: t.muted,
 							font: {
 								size: 11
 							}

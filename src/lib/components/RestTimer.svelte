@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Timer, Pause, Play, SkipForward } from 'lucide-svelte';
+	import { REST_TIMER_BEEP_FREQUENCY, REST_TIMER_BEEP_DURATION } from '$lib/data/config';
 
 	interface Props {
 		duration: number; // in seconds
@@ -38,14 +39,14 @@
 			oscillator.connect(gainNode);
 			gainNode.connect(audioContext.destination);
 
-			oscillator.frequency.value = 800;
+			oscillator.frequency.value = REST_TIMER_BEEP_FREQUENCY;
 			oscillator.type = 'sine';
 
 			gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-			gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+			gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + REST_TIMER_BEEP_DURATION * 2.5);
 
 			oscillator.start(audioContext.currentTime);
-			oscillator.stop(audioContext.currentTime + 0.5);
+			oscillator.stop(audioContext.currentTime + REST_TIMER_BEEP_DURATION * 2.5);
 		} catch (error) {
 			console.warn('Could not play notification sound:', error);
 		}
