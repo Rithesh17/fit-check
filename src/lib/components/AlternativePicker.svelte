@@ -27,7 +27,6 @@
 </script>
 
 <div class="fixed inset-0 z-40 flex flex-col bg-[var(--color-background)]">
-	<!-- Header -->
 	<div class="border-b border-[var(--color-border)] px-4 py-5">
 		<p class="mb-1 text-xs font-semibold uppercase tracking-widest text-[var(--color-primary)]">
 			Slot {slotNumber} of {totalSlots}

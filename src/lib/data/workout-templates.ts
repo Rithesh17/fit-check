@@ -256,7 +256,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
 						sets: 3,
 						reps: '8-10',
 						restSeconds: 90,
-						notes: '30–45°; clavicular chest fibers'
+						notes: '30-45°; clavicular chest fibers'
 					}
 				]
 			},

@@ -24,7 +24,12 @@
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import ExerciseEditor from '$lib/components/ExerciseEditor.svelte';
 	import AlternativePicker from '$lib/components/AlternativePicker.svelte';
-	import { activeWorkout, type ActiveWorkoutSlot, type ActiveSlotAlternative } from '$lib/stores/active-workout';
+	import {
+		activeWorkout,
+		type ActiveWorkoutSet,
+		type ActiveWorkoutSlot,
+		type ActiveSlotAlternative
+	} from '$lib/stores/active-workout';
 	import { loadCustomExercises, findExercise, type CustomExercise } from '$lib/services/exercises';
 	import { convertWeight, getWeightUnitLabel, kgToLbs } from '$lib/utils/weight-conversion';
 	import { unitPreference } from '$lib/stores/unit-preference';
@@ -36,7 +41,7 @@
 	} from '$lib/data/config';
 	import {
 		Check, X, Info, ChevronLeft, ChevronRight, Plus, Trash2,
-		Search, RefreshCw, LayoutList, Timer
+		Search, RefreshCw, LayoutList, Timer, GripVertical
 	} from 'lucide-svelte';
 
 	// ─── Core state ────────────────────────────────────────────────────────────
@@ -67,6 +72,9 @@
 	let showSwapPicker = $state(false);
 	let exercisePickerSearch = $state('');
 	let isSaving = $state(false);
+	let overviewReopenAfterAdd = $state(false);
+	let overviewDragFrom = $state<number | null>(null);
+	let overviewDragOver = $state<number | null>(null);
 
 	// Autofill
 	let previousSetData = $state<Record<string, Array<{ reps: number; weight: number }>>>({});
@@ -526,13 +534,111 @@
 		}
 		slots = [...slots, { alternatives: [newAlt], chosenIndex: 0 }];
 		showExercisePicker = false; exercisePickerSearch = '';
+		if (overviewReopenAfterAdd) {
+			showOverview = true;
+			overviewReopenAfterAdd = false;
+		}
 		toast.success(`${exercise.name} added`);
 		if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
 			fetchAndAutofill(exercise.id, slots.length - 1);
 		}
 	}
 
+	function openAddExerciseFromOverview() {
+		overviewReopenAfterAdd = true;
+		showExercisePicker = true;
+	}
+
+	function closeAddExercisePicker() {
+		showExercisePicker = false;
+		exercisePickerSearch = '';
+		if (overviewReopenAfterAdd) {
+			showOverview = true;
+			overviewReopenAfterAdd = false;
+		}
+	}
+
+	function reorderSlots(from: number, to: number) {
+		if (from === to || from < 0 || to < 0 || from >= slots.length || to >= slots.length) return;
+		const next = [...slots];
+		const [item] = next.splice(from, 1);
+		next.splice(to, 0, item);
+		slots = next;
+
+		let ci = currentSlotIndex;
+		if (ci === from) {
+			currentSlotIndex = to;
+		} else if (from < ci && to >= ci) {
+			currentSlotIndex = ci - 1;
+		} else if (from > ci && to <= ci) {
+			currentSlotIndex = ci + 1;
+		}
+	}
+
+	function deleteSlotAt(si: number) {
+		if (slots.length <= 1) {
+			toast.error('Keep at least one exercise in this workout');
+			return;
+		}
+		if (!confirm('Remove this exercise from the workout?')) return;
+
+		const next = slots.filter((_, i) => i !== si);
+		slots = next;
+
+		if (currentSlotIndex >= next.length) {
+			currentSlotIndex = next.length - 1;
+		} else if (si < currentSlotIndex) {
+			currentSlotIndex = currentSlotIndex - 1;
+		}
+	}
+
+	function onOverviewDragStart(si: number, e: DragEvent) {
+		overviewDragFrom = si;
+		e.dataTransfer?.setData('text/plain', String(si));
+		if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+	}
+
+	function onOverviewDragEnd() {
+		overviewDragFrom = null;
+		overviewDragOver = null;
+	}
+
+	function onOverviewDragOver(si: number, e: DragEvent) {
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+		overviewDragOver = si;
+	}
+
+	function onOverviewDrop(si: number, e: DragEvent) {
+		e.preventDefault();
+		const raw = e.dataTransfer?.getData('text/plain');
+		const from = raw !== '' && raw != null ? parseInt(raw, 10) : overviewDragFrom;
+		if (from == null || Number.isNaN(from)) return;
+		reorderSlots(from, si);
+		onOverviewDragEnd();
+	}
+
 	// ─── Save ──────────────────────────────────────────────────────────────────
+
+	/** Persist only sets explicitly completed in-session; strip autofill from incomplete sets. */
+	function strengthSetForSave(s: ActiveWorkoutSet) {
+		if (s.completed) {
+			return {
+				reps: s.reps,
+				weight: s.weight,
+				rest: s.rest,
+				completed: true,
+				...(s.durationSeconds != null ? { durationSeconds: s.durationSeconds } : {})
+			};
+		}
+		return {
+			reps: 0,
+			weight: 0,
+			rest: s.rest,
+			completed: false,
+			...(s.durationSeconds != null ? { durationSeconds: 0 } : {})
+		};
+	}
 
 	async function finishWorkout(skipConfirm = false) {
 		if (isSaving) return;
@@ -547,11 +653,21 @@
 					if (!alt) return null;
 					const base = { exercise_id: alt.exerciseId, exercise_order: i };
 					if (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') {
-						return { ...base, sets: alt.sets.map((s) => ({ reps: s.reps, weight: s.weight, rest: s.rest, completed: s.completed, ...(s.durationSeconds != null ? { durationSeconds: s.durationSeconds } : {}) })) };
+						return { ...base, sets: alt.sets.map((s) => strengthSetForSave(s)) };
 					} else if (alt.exerciseType === 'cardio') {
-						return { ...base, sets: { type: 'cardio', durationMinutes: alt.durationMinutes, calories: alt.calories, completed: alt.completed } };
+						return {
+							...base,
+							sets: alt.completed
+								? { type: 'cardio' as const, durationMinutes: alt.durationMinutes, calories: alt.calories, completed: true }
+								: { type: 'cardio' as const, durationMinutes: 0, calories: 0, completed: false }
+						};
 					} else if (alt.exerciseType === 'stretches') {
-						return { ...base, sets: { type: 'stretches', durationSeconds: alt.durationSeconds, reps: alt.reps, completed: alt.completed } };
+						return {
+							...base,
+							sets: alt.completed
+								? { type: 'stretches' as const, durationSeconds: alt.durationSeconds, reps: alt.reps, completed: true }
+								: { type: 'stretches' as const, durationSeconds: 0, reps: 0, completed: false }
+						};
 					}
 					return null;
 				})
@@ -654,6 +770,7 @@
 		<div class="mx-auto flex max-w-md items-center gap-3 px-4 py-3">
 			<!-- Back / finish -->
 			<button
+				type="button"
 				onclick={() => finishWorkout(false)}
 				class="flex-shrink-0 text-[var(--color-muted)] hover:text-[var(--color-foreground)]"
 				title="Save & finish"
@@ -820,6 +937,17 @@
 							{/each}
 						</div>
 					{/if}
+
+					<div class="mt-3 flex justify-end">
+						<button
+							type="button"
+							onclick={() => finishWorkout(false)}
+							disabled={isSaving}
+							class="rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/10 disabled:opacity-50"
+						>
+							{isSaving ? 'Saving…' : 'Complete workout'}
+						</button>
+					</div>
 				{/if}
 
 			<!-- ── Cardio ───────────────────────────────────────────────────────── -->
@@ -851,6 +979,16 @@
 				<button onclick={completeSet} class="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] py-4 text-lg font-bold text-white">
 					<Check class="h-6 w-6" /> Done
 				</button>
+				<div class="mt-3 flex justify-end">
+					<button
+						type="button"
+						onclick={() => finishWorkout(false)}
+						disabled={isSaving}
+						class="rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/10 disabled:opacity-50"
+					>
+						{isSaving ? 'Saving…' : 'Complete workout'}
+					</button>
+				</div>
 
 			<!-- ── Stretches ───────────────────────────────────────────────────── -->
 			{:else if currentAlt.exerciseType === 'stretches'}
@@ -873,6 +1011,16 @@
 				<button onclick={completeSet} class="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--color-primary)] py-4 text-lg font-bold text-white">
 					<Check class="h-6 w-6" /> Done
 				</button>
+				<div class="mt-3 flex justify-end">
+					<button
+						type="button"
+						onclick={() => finishWorkout(false)}
+						disabled={isSaving}
+						class="rounded-full border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-1.5 text-xs font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/10 disabled:opacity-50"
+					>
+						{isSaving ? 'Saving…' : 'Complete workout'}
+					</button>
+				</div>
 			{/if}
 		{/if}
 	</div>
@@ -939,38 +1087,88 @@
 {#if showOverview}
 	<div class="fixed inset-0 z-40 flex flex-col bg-[var(--color-background)]">
 		<div class="border-b border-[var(--color-border)] px-4 py-4">
-			<div class="flex items-center justify-between">
-				<h2 class="text-lg font-bold text-[var(--color-foreground)]">Workout Overview</h2>
-				<button onclick={() => (showOverview = false)} class="text-[var(--color-muted)]"><X class="h-5 w-5" /></button>
+			<div class="flex items-center justify-between gap-3">
+				<h2 class="min-w-0 flex-1 text-lg font-bold text-[var(--color-foreground)]">Workout Overview</h2>
+				<div class="flex flex-shrink-0 items-center gap-1">
+					<button
+						type="button"
+						onclick={openAddExerciseFromOverview}
+						class="rounded-lg p-2 text-[var(--color-muted)] hover:text-[var(--color-primary)]"
+						title="Add exercise"
+						aria-label="Add exercise"
+					>
+						<Plus class="h-5 w-5" />
+					</button>
+					<button
+						type="button"
+						onclick={() => (showOverview = false)}
+						class="rounded-lg p-2 text-[var(--color-muted)] hover:text-[var(--color-foreground)]"
+						title="Close overview"
+						aria-label="Close overview"
+					>
+						<X class="h-5 w-5" />
+					</button>
+				</div>
 			</div>
 		</div>
-		<div class="flex-1 overflow-y-auto px-4 py-4 space-y-2">
+		<div class="flex-1 overflow-y-auto px-4 py-4 space-y-2" role="list" aria-label="Exercises in this workout">
 			{#each slots as slot, si}
 				{@const ci = slot.chosenIndex}
 				{@const alt = ci !== null ? slot.alternatives[ci] : null}
 				{@const isDone = alt ? (() => { if (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') return alt.sets.every(s => s.completed); return (alt as any).completed; })() : false}
-				<button
-					onclick={() => goToSlot(si)}
-					class="fitness-card w-full text-left transition-all {si === currentSlotIndex ? 'border-[var(--color-primary)]/60' : ''}"
+				<div
+					class="fitness-card flex items-stretch gap-1 transition-all
+						{si === currentSlotIndex ? 'border-[var(--color-primary)]/60' : ''}
+						{overviewDragOver === si ? 'ring-2 ring-[var(--color-primary)]/50' : ''}"
+					ondragover={(e) => onOverviewDragOver(si, e)}
+					ondrop={(e) => onOverviewDrop(si, e)}
+					role="listitem"
 				>
-					<div class="flex items-center gap-3">
-						<span class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold
-							{isDone ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]' : si === currentSlotIndex ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-card-hover)] text-[var(--color-muted)]'}">
-							{si + 1}
-						</span>
-						<div class="min-w-0 flex-1">
-							<p class="truncate font-medium text-[var(--color-foreground)]">
-								{alt ? (alt.exerciseName ?? alt.exerciseId) : (slot.alternatives[0]?.exerciseName ?? '—')}
-							</p>
-							{#if slot.chosenIndex === null && slot.alternatives.length > 1}
-								<p class="text-xs text-[var(--color-warning)]">Choose exercise →</p>
-							{:else if alt && (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight')}
-								<p class="text-xs text-[var(--color-muted)]">{alt.sets.filter(s => s.completed).length}/{alt.sets.length} sets</p>
-							{/if}
+					<span
+						class="flex cursor-grab touch-none items-center px-1.5 text-[var(--color-muted)] active:cursor-grabbing hover:text-[var(--color-foreground)]"
+						draggable="true"
+						ondragstart={(e) => onOverviewDragStart(si, e)}
+						ondragend={onOverviewDragEnd}
+						title="Drag to reorder"
+						role="button"
+						tabindex="0"
+						aria-label="Drag to reorder"
+					>
+						<GripVertical class="h-5 w-5 shrink-0" />
+					</span>
+					<button
+						type="button"
+						onclick={() => goToSlot(si)}
+						class="min-w-0 flex-1 py-3 pr-1 text-left"
+					>
+						<div class="flex items-center gap-3">
+							<span class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold
+								{isDone ? 'bg-[var(--color-accent)]/20 text-[var(--color-accent)]' : si === currentSlotIndex ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-card-hover)] text-[var(--color-muted)]'}">
+								{si + 1}
+							</span>
+							<div class="min-w-0 flex-1">
+								<p class="truncate font-medium text-[var(--color-foreground)]">
+									{alt ? (alt.exerciseName ?? alt.exerciseId) : (slot.alternatives[0]?.exerciseName ?? '—')}
+								</p>
+								{#if slot.chosenIndex === null && slot.alternatives.length > 1}
+									<p class="text-xs text-[var(--color-warning)]">Choose exercise →</p>
+								{:else if alt && (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight')}
+									<p class="text-xs text-[var(--color-muted)]">{alt.sets.filter(s => s.completed).length}/{alt.sets.length} sets</p>
+								{/if}
+							</div>
+							{#if isDone}<Check class="h-4 w-4 flex-shrink-0 text-[var(--color-accent)]" />{/if}
 						</div>
-						{#if isDone}<Check class="h-4 w-4 flex-shrink-0 text-[var(--color-accent)]" />{/if}
-					</div>
-				</button>
+					</button>
+					<button
+						type="button"
+						onclick={(e) => { e.stopPropagation(); deleteSlotAt(si); }}
+						class="flex shrink-0 items-center justify-center px-3 py-3 text-[var(--color-muted)] hover:text-[var(--color-danger)]"
+						title="Remove exercise"
+						aria-label="Remove exercise"
+					>
+						<Trash2 class="h-5 w-5" />
+					</button>
+				</div>
 			{/each}
 
 			<div class="pt-4">
@@ -988,10 +1186,10 @@
 
 <!-- ── Exercise picker (add mid-workout) ─────────────────────────────────── -->
 {#if showExercisePicker}
-	<div class="fixed inset-0 z-40 flex flex-col bg-[var(--color-background)]">
+	<div class="fixed inset-0 z-[45] flex flex-col bg-[var(--color-background)]">
 		<div class="border-b border-[var(--color-border)] px-4 py-3">
 			<div class="flex items-center gap-3">
-				<button onclick={() => { showExercisePicker = false; exercisePickerSearch = ''; }} class="text-[var(--color-muted)]"><ChevronLeft class="h-5 w-5" /></button>
+				<button type="button" onclick={closeAddExercisePicker} class="text-[var(--color-muted)]" aria-label="Back"><ChevronLeft class="h-5 w-5" /></button>
 				<h2 class="flex-1 font-semibold text-[var(--color-foreground)]">Add Exercise</h2>
 				<button onclick={() => { editorReturnToPicker = true; showExercisePicker = false; showExerciseEditor = true; }} class="text-xs text-[var(--color-primary)]">+ Create</button>
 			</div>
