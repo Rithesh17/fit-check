@@ -620,7 +620,8 @@ function parseReps(reps: number | string | undefined, fallback: number): number 
 	return Number(reps) || fallback;
 }
 
-function alternativeToActiveSlot(
+/** Build a lean alternative (exercise metadata only — no sets). */
+function templateAltToSlotAlt(
 	alt: WorkoutTemplateAlternative,
 	customExercises: Exercise[] = []
 ): ActiveWorkoutSlot['alternatives'][number] | null {
@@ -628,8 +629,6 @@ function alternativeToActiveSlot(
 		getExerciseById(alt.exerciseId) ||
 		customExercises.find((ce) => ce.id === alt.exerciseId);
 	if (!exercise) return null;
-
-	const restSeconds = alt.restSeconds ?? DEFAULT_REST_BETWEEN_SETS;
 
 	if (exercise.exerciseType === 'cardio') {
 		return {
@@ -653,42 +652,21 @@ function alternativeToActiveSlot(
 		};
 	}
 
-	// weights / bodyweight
-	const numSets = alt.sets ?? DEFAULT_SETS;
-	const timeBased = isTimeBased(exercise);
-
-	if (timeBased) {
-		const dur = alt.durationSeconds ?? exercise.defaultDurationSeconds ?? 45;
-		return {
-			exerciseId: exercise.id,
-			exerciseName: exercise.name,
-			exerciseType: exercise.exerciseType as 'weights' | 'bodyweight',
-			sets: Array.from({ length: numSets }, () => ({
-				reps: 0,
-				weight: 0,
-				rest: restSeconds,
-				completed: false,
-				durationSeconds: dur
-			}))
-		};
-	}
-
-	const numReps = parseReps(alt.reps, exercise.defaultReps ?? DEFAULT_REPS);
+	// weights / bodyweight — sets live at slot level, not here
 	return {
 		exerciseId: exercise.id,
 		exerciseName: exercise.name,
-		exerciseType: exercise.exerciseType as 'weights' | 'bodyweight',
-		sets: Array.from({ length: numSets }, () => ({
-			reps: numReps,
-			weight: 0,
-			rest: restSeconds,
-			completed: false
-		}))
+		exerciseType: exercise.exerciseType as 'weights' | 'bodyweight'
 	};
 }
 
 /**
  * Convert a WorkoutTemplate to ActiveWorkoutSlot[] ready for the active workout store.
+ *
+ * Sets are built from the PRIMARY alternative's settings and stored at the slot
+ * level. Each set is stamped with the primary exercise's id/name. Switching to an
+ * alternative mid-workout updates the exerciseId/exerciseName on uncompleted sets
+ * only, so completed sets permanently record which exercise was actually performed.
  */
 export function templateToActiveSlots(
 	template: WorkoutTemplate,
@@ -697,15 +675,58 @@ export function templateToActiveSlots(
 	return template.slots
 		.map((slot): ActiveWorkoutSlot | null => {
 			const alts = slot.alternatives
-				.map((alt) => alternativeToActiveSlot(alt, customExercises))
+				.map((alt) => templateAltToSlotAlt(alt, customExercises))
 				.filter((a): a is NonNullable<typeof a> => a !== null);
 
 			if (alts.length === 0) return null;
 
+			// Build slot-level sets from the primary alternative
+			const primaryTemplateAlt = slot.alternatives[0];
+			const primaryExercise =
+				getExerciseById(primaryTemplateAlt.exerciseId) ||
+				customExercises.find((ce) => ce.id === primaryTemplateAlt.exerciseId);
+
+			if (!primaryExercise) return null;
+
+			const restSeconds = primaryTemplateAlt.restSeconds ?? DEFAULT_REST_BETWEEN_SETS;
+
+			// Cardio / stretches: no slot-level sets
+			if (primaryExercise.exerciseType === 'cardio' || primaryExercise.exerciseType === 'stretches') {
+				return { alternatives: alts, currentExerciseIndex: 0, sets: [] };
+			}
+
+			const numSets = primaryTemplateAlt.sets ?? DEFAULT_SETS;
+			const timeBased = isTimeBased(primaryExercise);
+
+			if (timeBased) {
+				const dur = primaryTemplateAlt.durationSeconds ?? primaryExercise.defaultDurationSeconds ?? 45;
+				return {
+					alternatives: alts,
+					currentExerciseIndex: 0,
+					sets: Array.from({ length: numSets }, () => ({
+						reps: 0,
+						weight: 0,
+						rest: restSeconds,
+						completed: false,
+						exerciseId: primaryExercise.id,
+						exerciseName: primaryExercise.name,
+						durationSeconds: dur
+					}))
+				};
+			}
+
+			const numReps = parseReps(primaryTemplateAlt.reps, primaryExercise.defaultReps ?? DEFAULT_REPS);
 			return {
 				alternatives: alts,
-				// Always default to primary (index 0); user can swap during the workout
-				chosenIndex: 0
+				currentExerciseIndex: 0,
+				sets: Array.from({ length: numSets }, () => ({
+					reps: numReps,
+					weight: 0,
+					rest: restSeconds,
+					completed: false,
+					exerciseId: primaryExercise.id,
+					exerciseName: primaryExercise.name
+				}))
 			};
 		})
 		.filter((s): s is ActiveWorkoutSlot => s !== null);

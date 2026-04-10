@@ -12,7 +12,7 @@ const FALLBACK = {
 	background: '#000000'
 } as const;
 
-export type ChartTheme = typeof FALLBACK;
+export type ChartTheme = { [K in keyof typeof FALLBACK]: string };
 
 export function getChartTheme(): ChartTheme {
 	if (typeof document === 'undefined') return { ...FALLBACK };

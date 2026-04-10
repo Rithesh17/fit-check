@@ -7,9 +7,10 @@
 	 *
 	 * Key concepts:
 	 *  - A workout is an ordered list of SLOTS.
-	 *  - Each slot has 1..N alternatives. chosenIndex === null means the user
-	 *    hasn't picked yet (AlternativePicker will show).
-	 *  - Once chosen, slot.alternatives[chosenIndex] is the exercise being logged.
+	 *  - Each slot has 1..N alternatives (exercise pool) and a currentExerciseIndex.
+	 *  - Sets live at the SLOT level. Each set carries its own exerciseId/exerciseName,
+	 *    so switching alternatives mid-slot is non-destructive: completed sets keep
+	 *    their original exercise; only uncompleted sets are re-stamped.
 	 *  - Circuit mode: same set-index across all slots in a "round".
 	 *  - Straight mode: all sets of one slot before moving to the next.
 	 */
@@ -23,7 +24,6 @@
 	import RestTimer from '$lib/components/RestTimer.svelte';
 	import ExerciseDetail from '$lib/components/ExerciseDetail.svelte';
 	import ExerciseEditor from '$lib/components/ExerciseEditor.svelte';
-	import AlternativePicker from '$lib/components/AlternativePicker.svelte';
 	import {
 		activeWorkout,
 		type ActiveWorkoutSet,
@@ -90,55 +90,60 @@
 
 	// ─── Derived helpers ────────────────────────────────────────────────────────
 
-	/** The active alternative for the current slot, or null if not yet chosen */
+	/** The currently selected alternative (exercise) for this slot */
 	const currentAlt = $derived<ActiveSlotAlternative | null>(
 		slots[currentSlotIndex]
-			? (slots[currentSlotIndex].chosenIndex !== null
-					? slots[currentSlotIndex].alternatives[slots[currentSlotIndex].chosenIndex!] ?? null
-					: null)
+			? (slots[currentSlotIndex].alternatives[slots[currentSlotIndex].currentExerciseIndex] ?? null)
 			: null
 	);
 
-	const needsAlternativePick = $derived(
-		!!slots[currentSlotIndex] &&
-		slots[currentSlotIndex].chosenIndex === null &&
-		slots[currentSlotIndex].alternatives.length > 1
-	);
-
+	/** Exercise record for the currently selected alternative (used for instructions/detail) */
 	const currentExercise = $derived<Exercise | null>(
 		currentAlt ? (findExercise(currentAlt.exerciseId, customExercises) ?? null) : null
 	);
 
+	/** The set being viewed/edited — lives at slot level */
 	const currentSet = $derived(
-		currentAlt && (currentAlt.exerciseType === 'weights' || currentAlt.exerciseType === 'bodyweight')
-			? (currentAlt.sets[currentSetIndex] ?? null)
+		slots[currentSlotIndex] && (currentAlt?.exerciseType === 'weights' || currentAlt?.exerciseType === 'bodyweight')
+			? (slots[currentSlotIndex].sets[currentSetIndex] ?? null)
 			: null
 	);
 
-	const isTimeBased_ = $derived(currentExercise ? isTimeBased(currentExercise) : false);
+	/**
+	 * The exercise for the CURRENT SET (may differ from currentAlt when the user
+	 * navigates back to a completed set done with a previous alternative).
+	 */
+	const currentSetExercise = $derived<Exercise | null>(
+		currentSet
+			? (findExercise(currentSet.exerciseId, customExercises) ?? null)
+			: currentExercise
+	);
+
+	const isTimeBased_ = $derived(currentSetExercise ? isTimeBased(currentSetExercise) : false);
 
 	const totalSlots = $derived(slots.length);
 
 	const allComplete = $derived(
 		slots.every((slot) => {
-			if (slot.chosenIndex === null) return false;
-			const alt = slot.alternatives[slot.chosenIndex];
+			const alt = slot.alternatives[slot.currentExerciseIndex];
 			if (!alt) return false;
 			if (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') {
-				return alt.sets.every((s) => s.completed);
+				return slot.sets.length > 0 && slot.sets.every((s) => s.completed);
 			}
 			return (alt as any).completed === true;
 		})
 	);
 
 	const completedSetsInSlot = $derived.by(() => {
-		if (!currentAlt || (currentAlt.exerciseType !== 'weights' && currentAlt.exerciseType !== 'bodyweight')) return 0;
-		return currentAlt.sets.filter((s) => s.completed).length;
+		const slot = slots[currentSlotIndex];
+		if (!slot || !currentAlt || (currentAlt.exerciseType !== 'weights' && currentAlt.exerciseType !== 'bodyweight')) return 0;
+		return slot.sets.filter((s) => s.completed).length;
 	});
 
 	const totalSetsInSlot = $derived.by(() => {
-		if (!currentAlt || (currentAlt.exerciseType !== 'weights' && currentAlt.exerciseType !== 'bodyweight')) return 1;
-		return currentAlt.sets.length;
+		const slot = slots[currentSlotIndex];
+		if (!slot || !currentAlt || (currentAlt.exerciseType !== 'weights' && currentAlt.exerciseType !== 'bodyweight')) return 1;
+		return slot.sets.length;
 	});
 
 	const pickerExercises = $derived.by(() => {
@@ -171,10 +176,9 @@
 		workoutStartTime = new Date();
 		startDurationTimer();
 
-		// Autofill in background
+		// Autofill in background for each slot's primary exercise
 		slots.forEach((slot, si) => {
-			if (slot.chosenIndex === null) return;
-			const alt = slot.alternatives[slot.chosenIndex];
+			const alt = slot.alternatives[slot.currentExerciseIndex];
 			if (alt && (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight')) {
 				fetchAndAutofill(alt.exerciseId, si);
 			}
@@ -194,7 +198,7 @@
 		}));
 	});
 
-	// Start/stop cardio timer based on current exercise
+	// Start/stop cardio timer based on current alternative type
 	$effect(() => {
 		if (currentAlt?.exerciseType === 'cardio' && !cardioTimerRunning) {
 			startCardioTimer();
@@ -240,31 +244,45 @@
 			: `${m}:${String(sec).padStart(2, '0')}`;
 	}
 
-	// ─── Alternative picker ─────────────────────────────────────────────────────
+	// ─── Alternative switching ───────────────────────────────────────────────────
 
-	function chooseAlternative(index: number) {
-		slots = slots.map((s, i) =>
-			i === currentSlotIndex ? { ...s, chosenIndex: index } : s
-		);
-		// Kick off autofill for freshly chosen alternative
-		const alt = slots[currentSlotIndex].alternatives[index];
-		if (alt && (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight')) {
-			fetchAndAutofill(alt.exerciseId, currentSlotIndex);
+	/**
+	 * Switch the current slot to a different alternative.
+	 * Completed sets keep their original exerciseId unchanged.
+	 * Uncompleted sets are re-stamped with the new exercise so they autofill correctly.
+	 */
+	function switchToAlternative(index: number) {
+		const slot = slots[currentSlotIndex];
+		if (!slot || index === slot.currentExerciseIndex) return;
+		const newAlt = slot.alternatives[index];
+		if (!newAlt) return;
+		const newId = newAlt.exerciseId;
+		const newName = newAlt.exerciseName ?? newAlt.exerciseId;
+		slots = slots.map((s, si) => {
+			if (si !== currentSlotIndex) return s;
+			return {
+				...s,
+				currentExerciseIndex: index,
+				sets: s.sets.map((set) =>
+					set.completed ? set : { ...set, exerciseId: newId, exerciseName: newName }
+				)
+			};
+		});
+		if (newAlt.exerciseType === 'weights' || newAlt.exerciseType === 'bodyweight') {
+			fetchAndAutofill(newId, currentSlotIndex);
 		}
 	}
 
 	// ─── Position initialisation ─────────────────────────────────────────────────
 
 	function initPosition() {
-		// Find first slot with an incomplete set
 		if (workoutMode === 'straight') {
 			for (let si = 0; si < slots.length; si++) {
 				const slot = slots[si];
-				if (slot.chosenIndex === null) { currentSlotIndex = si; currentSetIndex = 0; return; }
-				const alt = slot.alternatives[slot.chosenIndex];
+				const alt = slot.alternatives[slot.currentExerciseIndex];
 				if (!alt) continue;
 				if (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') {
-					const firstIncomplete = alt.sets.findIndex((s) => !s.completed);
+					const firstIncomplete = slot.sets.findIndex((s) => !s.completed);
 					if (firstIncomplete !== -1) { currentSlotIndex = si; currentSetIndex = firstIncomplete; return; }
 				} else if (!(alt as any).completed) {
 					currentSlotIndex = si; currentSetIndex = 0; return;
@@ -273,17 +291,15 @@
 		} else {
 			// Circuit: find first incomplete by round
 			const maxSets = Math.max(...slots.map((s) => {
-				if (s.chosenIndex === null) return 0;
-				const a = s.alternatives[s.chosenIndex];
-				return (a?.exerciseType === 'weights' || a?.exerciseType === 'bodyweight') ? a.sets.length : 1;
+				const a = s.alternatives[s.currentExerciseIndex];
+				return (a?.exerciseType === 'weights' || a?.exerciseType === 'bodyweight') ? s.sets.length : 1;
 			}), 0);
 			for (let setIdx = 0; setIdx < maxSets; setIdx++) {
 				for (let si = 0; si < slots.length; si++) {
 					const slot = slots[si];
-					if (slot.chosenIndex === null) { currentSlotIndex = si; currentSetIndex = setIdx; return; }
-					const alt = slot.alternatives[slot.chosenIndex];
+					const alt = slot.alternatives[slot.currentExerciseIndex];
 					if (!alt) continue;
-					if ((alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && setIdx < alt.sets.length && !alt.sets[setIdx].completed) {
+					if ((alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && setIdx < slot.sets.length && !slot.sets[setIdx].completed) {
 						currentSlotIndex = si; currentSetIndex = setIdx; return;
 					}
 				}
@@ -297,27 +313,19 @@
 	function updateSetField(field: 'reps' | 'weight' | 'rest' | 'completed' | 'durationSeconds', value: number | boolean) {
 		slots = slots.map((slot, si) => {
 			if (si !== currentSlotIndex) return slot;
-			const ci = slot.chosenIndex;
-			if (ci === null) return slot;
-			const alts = slot.alternatives.map((alt, ai) => {
-				if (ai !== ci) return alt;
-				if (alt.exerciseType !== 'weights' && alt.exerciseType !== 'bodyweight') return alt;
-				return {
-					...alt,
-					sets: alt.sets.map((set, setIdx) =>
-						setIdx === currentSetIndex ? { ...set, [field]: value } : set
-					)
-				};
-			});
-			return { ...slot, alternatives: alts };
+			return {
+				...slot,
+				sets: slot.sets.map((set, setIdx) =>
+					setIdx === currentSetIndex ? { ...set, [field]: value } : set
+				)
+			};
 		});
 	}
 
 	function updateCardioField(field: 'durationMinutes' | 'calories', value: number) {
 		slots = slots.map((slot, si) => {
 			if (si !== currentSlotIndex) return slot;
-			const ci = slot.chosenIndex;
-			if (ci === null) return slot;
+			const ci = slot.currentExerciseIndex;
 			return {
 				...slot,
 				alternatives: slot.alternatives.map((alt, ai) =>
@@ -330,8 +338,7 @@
 	function markCurrentCompleted() {
 		slots = slots.map((slot, si) => {
 			if (si !== currentSlotIndex) return slot;
-			const ci = slot.chosenIndex;
-			if (ci === null) return slot;
+			const ci = slot.currentExerciseIndex;
 			return {
 				...slot,
 				alternatives: slot.alternatives.map((alt, ai) => {
@@ -364,8 +371,9 @@
 	function advanceStraight() {
 		showRestTimer = false; isRestBetweenExercises = false;
 		// Next incomplete set in current slot
+		const currentSlot = slots[currentSlotIndex];
 		if (currentAlt?.exerciseType === 'weights' || currentAlt?.exerciseType === 'bodyweight') {
-			const nextSet = currentAlt.sets.findIndex((s, i) => i > currentSetIndex && !s.completed);
+			const nextSet = currentSlot.sets.findIndex((s, i) => i > currentSetIndex && !s.completed);
 			if (nextSet !== -1) {
 				if (restDurationBetweenExercises > 0) { showRestTimer = true; isRestBetweenExercises = true; }
 				else { currentSetIndex = nextSet; }
@@ -375,16 +383,10 @@
 		// Move to next slot
 		for (let si = currentSlotIndex + 1; si < slots.length; si++) {
 			const slot = slots[si];
-			if (slot.chosenIndex === null && slot.alternatives.length > 1) {
-				// Multi-alternative slot — navigate there (picker will show)
-				if (restDurationBetweenExercises > 0) { showRestTimer = true; isRestBetweenExercises = true; }
-				else { currentSlotIndex = si; currentSetIndex = 0; }
-				return;
-			}
-			const alt = slot.chosenIndex !== null ? slot.alternatives[slot.chosenIndex] : null;
+			const alt = slot.alternatives[slot.currentExerciseIndex];
 			if (!alt) { currentSlotIndex = si; currentSetIndex = 0; return; }
 			if (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') {
-				const first = alt.sets.findIndex((s) => !s.completed);
+				const first = slot.sets.findIndex((s) => !s.completed);
 				if (first !== -1) {
 					if (restDurationBetweenExercises > 0) { showRestTimer = true; isRestBetweenExercises = true; }
 					else { currentSlotIndex = si; currentSetIndex = first; }
@@ -404,8 +406,8 @@
 		// Same set index, next slot
 		for (let si = currentSlotIndex + 1; si < slots.length; si++) {
 			const slot = slots[si];
-			const alt = slot.chosenIndex !== null ? slot.alternatives[slot.chosenIndex] : null;
-			if (!alt || (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && currentSetIndex < alt.sets.length && !alt.sets[currentSetIndex].completed) {
+			const alt = slot.alternatives[slot.currentExerciseIndex];
+			if (!alt || ((alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && currentSetIndex < slot.sets.length && !slot.sets[currentSetIndex].completed)) {
 				if (restDurationBetweenExercises > 0) { showRestTimer = true; isRestBetweenExercises = true; }
 				else { currentSlotIndex = si; }
 				return;
@@ -415,9 +417,9 @@
 		const nextSet = currentSetIndex + 1;
 		for (let si = 0; si < slots.length; si++) {
 			const slot = slots[si];
-			const alt = slot.chosenIndex !== null ? slot.alternatives[slot.chosenIndex] : null;
+			const alt = slot.alternatives[slot.currentExerciseIndex];
 			if (!alt) continue;
-			if ((alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && nextSet < alt.sets.length && !alt.sets[nextSet].completed) {
+			if ((alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && nextSet < slot.sets.length && !slot.sets[nextSet].completed) {
 				if (restDurationBetweenExercises > 0) { showRestTimer = true; isRestBetweenExercises = true; }
 				else { currentSlotIndex = si; currentSetIndex = nextSet; }
 				return;
@@ -429,23 +431,22 @@
 	function onRestComplete() {
 		showRestTimer = false;
 		isRestBetweenExercises = false;
-		// Resume position — just advance pointers without showing rest again
 		if (workoutMode === 'straight') resumeStraight();
 		else resumeCircuit();
 	}
 
 	function resumeStraight() {
+		const currentSlot = slots[currentSlotIndex];
 		if (currentAlt?.exerciseType === 'weights' || currentAlt?.exerciseType === 'bodyweight') {
-			const next = currentAlt.sets.findIndex((s, i) => i > currentSetIndex && !s.completed);
+			const next = currentSlot.sets.findIndex((s, i) => i > currentSetIndex && !s.completed);
 			if (next !== -1) { currentSetIndex = next; return; }
 		}
 		for (let si = currentSlotIndex + 1; si < slots.length; si++) {
 			const slot = slots[si];
-			if (slot.chosenIndex === null) { currentSlotIndex = si; currentSetIndex = 0; return; }
-			const alt = slot.alternatives[slot.chosenIndex];
+			const alt = slot.alternatives[slot.currentExerciseIndex];
 			if (!alt) { currentSlotIndex = si; currentSetIndex = 0; return; }
 			if (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') {
-				const first = alt.sets.findIndex((s) => !s.completed);
+				const first = slot.sets.findIndex((s) => !s.completed);
 				if (first !== -1) { currentSlotIndex = si; currentSetIndex = first; return; }
 			} else if (!(alt as any).completed) {
 				currentSlotIndex = si; currentSetIndex = 0; return;
@@ -456,17 +457,17 @@
 	function resumeCircuit() {
 		for (let si = currentSlotIndex + 1; si < slots.length; si++) {
 			const slot = slots[si];
-			const alt = slot.chosenIndex !== null ? slot.alternatives[slot.chosenIndex] : null;
-			if (!alt || ((alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && currentSetIndex < alt.sets.length && !alt.sets[currentSetIndex].completed)) {
+			const alt = slot.alternatives[slot.currentExerciseIndex];
+			if (!alt || ((alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && currentSetIndex < slot.sets.length && !slot.sets[currentSetIndex].completed)) {
 				currentSlotIndex = si; return;
 			}
 		}
 		const nextSet = currentSetIndex + 1;
 		for (let si = 0; si < slots.length; si++) {
 			const slot = slots[si];
-			const alt = slot.chosenIndex !== null ? slot.alternatives[slot.chosenIndex] : null;
+			const alt = slot.alternatives[slot.currentExerciseIndex];
 			if (!alt) continue;
-			if ((alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && nextSet < alt.sets.length && !alt.sets[nextSet].completed) {
+			if ((alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') && nextSet < slot.sets.length && !slot.sets[nextSet].completed) {
 				currentSlotIndex = si; currentSetIndex = nextSet; return;
 			}
 		}
@@ -485,21 +486,15 @@
 		if (!prev || prev.length === 0) return;
 		slots = slots.map((slot, si) => {
 			if (si !== slotIdx) return slot;
-			const ci = slot.chosenIndex;
-			if (ci === null) return slot;
+			let exerciseSetIdx = 0;
 			return {
 				...slot,
-				alternatives: slot.alternatives.map((alt, ai) => {
-					if (ai !== ci || alt.exerciseId !== exerciseId) return alt;
-					if (alt.exerciseType !== 'weights' && alt.exerciseType !== 'bodyweight') return alt;
-					return {
-						...alt,
-						sets: alt.sets.map((set, si2) => {
-							if (set.weight !== 0) return set;
-							const p = prev[si2] ?? prev[prev.length - 1];
-							return { ...set, reps: p.reps, weight: p.weight };
-						})
-					};
+				sets: slot.sets.map((set) => {
+					if (set.exerciseId !== exerciseId) return set;
+					const idx = exerciseSetIdx++;
+					if (set.weight !== 0) return set;
+					const p = prev[idx] ?? prev[prev.length - 1];
+					return { ...set, reps: p.reps, weight: p.weight };
 				})
 			};
 		});
@@ -509,35 +504,33 @@
 
 	function addExerciseMidWorkout(exercise: Exercise) {
 		const timeBased = isTimeBased(exercise);
-		let newAlt: ActiveSlotAlternative;
 		const maxSets = Math.max(...slots.map((s) => {
-			if (s.chosenIndex === null) return DEFAULT_SETS;
-			const a = s.alternatives[s.chosenIndex];
-			return (a?.exerciseType === 'weights' || a?.exerciseType === 'bodyweight') ? a.sets.length : 1;
+			const a = s.alternatives[s.currentExerciseIndex];
+			return (a?.exerciseType === 'weights' || a?.exerciseType === 'bodyweight') ? s.sets.length : 1;
 		}), DEFAULT_SETS);
+
+		let newAlt: ActiveSlotAlternative;
+		let newSets: ActiveWorkoutSet[] = [];
 
 		if (exercise.exerciseType === 'cardio') {
 			newAlt = { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'cardio', durationMinutes: exercise.defaultDurationMinutes ?? 20, calories: exercise.defaultCalories ?? 0, completed: false };
 		} else if (exercise.exerciseType === 'stretches') {
 			newAlt = { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'stretches', durationSeconds: exercise.defaultDurationSeconds ?? 30, reps: exercise.defaultRepsStretches ?? 3, completed: false };
 		} else {
-			newAlt = {
-				exerciseId: exercise.id, exerciseName: exercise.name,
-				exerciseType: exercise.exerciseType as 'weights' | 'bodyweight',
-				sets: Array.from({ length: maxSets }, () => ({
-					reps: timeBased ? 0 : (exercise.defaultReps ?? DEFAULT_REPS),
-					weight: 0, rest: exercise.defaultRestSeconds ?? DEFAULT_REST_BETWEEN_SETS,
-					completed: false,
-					...(timeBased ? { durationSeconds: exercise.defaultDurationSeconds ?? 45 } : {})
-				}))
-			};
+			newAlt = { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: exercise.exerciseType as 'weights' | 'bodyweight' };
+			newSets = Array.from({ length: maxSets }, () => ({
+				reps: timeBased ? 0 : (exercise.defaultReps ?? DEFAULT_REPS),
+				weight: 0,
+				rest: exercise.defaultRestSeconds ?? DEFAULT_REST_BETWEEN_SETS,
+				completed: false,
+				exerciseId: exercise.id,
+				exerciseName: exercise.name,
+				...(timeBased ? { durationSeconds: exercise.defaultDurationSeconds ?? 45 } : {})
+			}));
 		}
-		slots = [...slots, { alternatives: [newAlt], chosenIndex: 0 }];
+		slots = [...slots, { alternatives: [newAlt], currentExerciseIndex: 0, sets: newSets }];
 		showExercisePicker = false; exercisePickerSearch = '';
-		if (overviewReopenAfterAdd) {
-			showOverview = true;
-			overviewReopenAfterAdd = false;
-		}
+		if (overviewReopenAfterAdd) { showOverview = true; overviewReopenAfterAdd = false; }
 		toast.success(`${exercise.name} added`);
 		if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
 			fetchAndAutofill(exercise.id, slots.length - 1);
@@ -645,33 +638,46 @@
 		if (!skipConfirm && !confirm('Finish and save this workout?')) return;
 		isSaving = true;
 		try {
-			const exercisesToSave = slots
-				.map((slot, i) => {
-					const ci = slot.chosenIndex;
-					if (ci === null) return null;
-					const alt = slot.alternatives[ci];
-					if (!alt) return null;
-					const base = { exercise_id: alt.exerciseId, exercise_order: i };
-					if (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') {
-						return { ...base, sets: alt.sets.map((s) => strengthSetForSave(s)) };
-					} else if (alt.exerciseType === 'cardio') {
-						return {
-							...base,
-							sets: alt.completed
-								? { type: 'cardio' as const, durationMinutes: alt.durationMinutes, calories: alt.calories, completed: true }
-								: { type: 'cardio' as const, durationMinutes: 0, calories: 0, completed: false }
-						};
-					} else if (alt.exerciseType === 'stretches') {
-						return {
-							...base,
-							sets: alt.completed
-								? { type: 'stretches' as const, durationSeconds: alt.durationSeconds, reps: alt.reps, completed: true }
-								: { type: 'stretches' as const, durationSeconds: 0, reps: 0, completed: false }
-						};
+			// For weights/bodyweight: group each slot's sets by exerciseId so mixed-exercise
+			// slots produce one workout_exercises row per exercise (order preserved).
+			const exercisesToSave = slots.flatMap((slot, i): { exercise_id: string; exercise_order: number; sets: unknown }[] => {
+				const alt = slot.alternatives[slot.currentExerciseIndex];
+				if (!alt) return [];
+
+				if (alt.exerciseType === 'cardio') {
+					return [{
+						exercise_id: alt.exerciseId,
+						exercise_order: i * 100,
+						sets: (alt as any).completed
+							? { type: 'cardio' as const, durationMinutes: (alt as any).durationMinutes, calories: (alt as any).calories, completed: true }
+							: { type: 'cardio' as const, durationMinutes: 0, calories: 0, completed: false }
+					}];
+				}
+				if (alt.exerciseType === 'stretches') {
+					return [{
+						exercise_id: alt.exerciseId,
+						exercise_order: i * 100,
+						sets: (alt as any).completed
+							? { type: 'stretches' as const, durationSeconds: (alt as any).durationSeconds, reps: (alt as any).reps, completed: true }
+							: { type: 'stretches' as const, durationSeconds: 0, reps: 0, completed: false }
+					}];
+				}
+
+				// Weights/bodyweight: group sets by exerciseId, preserving order of first appearance
+				const grouped = new Map<string, { sets: ActiveWorkoutSet[]; order: number }>();
+				let orderIdx = 0;
+				for (const set of slot.sets) {
+					if (!grouped.has(set.exerciseId)) {
+						grouped.set(set.exerciseId, { sets: [], order: orderIdx++ });
 					}
-					return null;
-				})
-				.filter((e): e is NonNullable<typeof e> => e !== null);
+					grouped.get(set.exerciseId)!.sets.push(set);
+				}
+				return Array.from(grouped.entries()).map(([exId, { sets, order }]) => ({
+					exercise_id: exId,
+					exercise_order: i * 100 + order,
+					sets: sets.map((s) => strengthSetForSave(s))
+				}));
+			});
 
 			const workoutId = await saveWorkout(
 				{ name: workoutName || 'Workout', date: workoutStartTime?.toISOString() ?? new Date().toISOString(), duration_minutes: Math.ceil(workoutDuration / 60), notes: workoutNotes || null, energy_level: energyLevel, mood: mood || null },
@@ -692,11 +698,11 @@
 		showRestTimer = false; isRestBetweenExercises = false; showOverview = false;
 		currentSlotIndex = si;
 		const slot = slots[si];
-		if (!slot || slot.chosenIndex === null) { currentSetIndex = 0; return; }
-		const alt = slot.alternatives[slot.chosenIndex];
+		if (!slot) { currentSetIndex = 0; return; }
+		const alt = slot.alternatives[slot.currentExerciseIndex];
 		if (!alt) { currentSetIndex = 0; return; }
 		if (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') {
-			const first = alt.sets.findIndex((s) => !s.completed);
+			const first = slot.sets.findIndex((s) => !s.completed);
 			currentSetIndex = first !== -1 ? first : 0;
 		} else {
 			currentSetIndex = 0;
@@ -715,53 +721,49 @@
 	}
 
 	function swapExerciseInSlot(exercise: Exercise) {
-		const timeBased = isTimeBased(exercise);
-		const existingAlt = currentAlt;
-		let newAlt: ActiveSlotAlternative;
+		// If the exercise is already an alternative, just switch to it
+		const slot = slots[currentSlotIndex];
+		let altIndex = slot.alternatives.findIndex((a) => a.exerciseId === exercise.id);
+		let newAlternatives = slot.alternatives;
 
-		if (exercise.exerciseType === 'cardio') {
-			newAlt = { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'cardio', durationMinutes: exercise.defaultDurationMinutes ?? 20, calories: exercise.defaultCalories ?? 0, completed: false };
-		} else if (exercise.exerciseType === 'stretches') {
-			newAlt = { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'stretches', durationSeconds: exercise.defaultDurationSeconds ?? 30, reps: exercise.defaultRepsStretches ?? 3, completed: false };
-		} else {
-			const setCount = (existingAlt?.exerciseType === 'weights' || existingAlt?.exerciseType === 'bodyweight') ? existingAlt.sets.length : DEFAULT_SETS;
-			newAlt = {
-				exerciseId: exercise.id, exerciseName: exercise.name,
-				exerciseType: exercise.exerciseType as 'weights' | 'bodyweight',
-				sets: Array.from({ length: setCount }, () => ({
-					reps: timeBased ? 0 : (exercise.defaultReps ?? DEFAULT_REPS), weight: 0,
-					rest: exercise.defaultRestSeconds ?? DEFAULT_REST_BETWEEN_SETS, completed: false,
-					...(timeBased ? { durationSeconds: exercise.defaultDurationSeconds ?? 45 } : {})
-				}))
-			};
+		if (altIndex === -1) {
+			// Add as a new alternative
+			let newAlt: ActiveSlotAlternative;
+			if (exercise.exerciseType === 'cardio') {
+				newAlt = { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'cardio', durationMinutes: exercise.defaultDurationMinutes ?? 20, calories: exercise.defaultCalories ?? 0, completed: false };
+			} else if (exercise.exerciseType === 'stretches') {
+				newAlt = { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: 'stretches', durationSeconds: exercise.defaultDurationSeconds ?? 30, reps: exercise.defaultRepsStretches ?? 3, completed: false };
+			} else {
+				newAlt = { exerciseId: exercise.id, exerciseName: exercise.name, exerciseType: exercise.exerciseType as 'weights' | 'bodyweight' };
+			}
+			newAlternatives = [...slot.alternatives, newAlt];
+			altIndex = newAlternatives.length - 1;
 		}
 
-		slots = slots.map((slot, si) => {
-			if (si !== currentSlotIndex) return slot;
-			const ci = slot.chosenIndex ?? 0;
-			return { ...slot, chosenIndex: ci, alternatives: slot.alternatives.map((a, ai) => ai === ci ? newAlt : a) };
+		const newId = exercise.id;
+		const newName = exercise.name;
+		slots = slots.map((s, si) => {
+			if (si !== currentSlotIndex) return s;
+			return {
+				...s,
+				alternatives: newAlternatives,
+				currentExerciseIndex: altIndex,
+				sets: s.sets.map((set) =>
+					set.completed ? set : { ...set, exerciseId: newId, exerciseName: newName }
+				)
+			};
 		});
-		currentSetIndex = 0;
 		showSwapPicker = false;
 		toast.success(`Swapped to ${exercise.name}`);
+		if (exercise.exerciseType === 'weights' || exercise.exerciseType === 'bodyweight') {
+			fetchAndAutofill(exercise.id, currentSlotIndex);
+		}
 	}
 </script>
 
 <svelte:head>
 	<title>{workoutName || 'Workout'} — Fit Check</title>
 </svelte:head>
-
-<!-- Alternative Picker (full screen) -->
-{#if needsAlternativePick}
-	<AlternativePicker
-		slot={slots[currentSlotIndex]}
-		slotNumber={currentSlotIndex + 1}
-		totalSlots={totalSlots}
-		previousData={previousSetData}
-		unit={currentUnit}
-		onChoose={chooseAlternative}
-	/>
-{:else}
 
 <div class="flex min-h-screen flex-col bg-[var(--color-background)]">
 
@@ -821,7 +823,7 @@
 
 				<div class="flex items-center gap-2">
 					<h2 class="flex-1 text-2xl font-bold text-[var(--color-foreground)]">
-						{currentAlt.exerciseName ?? currentAlt.exerciseId}
+						{currentSet?.exerciseName ?? currentAlt.exerciseName ?? currentAlt.exerciseId}
 					</h2>
 					<button onclick={() => (showInstructions = true)} class="text-[var(--color-muted)] hover:text-[var(--color-foreground)]">
 						<Info class="h-5 w-5" />
@@ -837,19 +839,14 @@
 					{/if}
 				</div>
 
-				<!-- Alternatives hint -->
+				<!-- Alternative pills — switch which exercise upcoming sets will use -->
 				{#if slots[currentSlotIndex].alternatives.length > 1}
 					<div class="mt-1 flex gap-1">
 						{#each slots[currentSlotIndex].alternatives as alt, i}
 							<button
-								onclick={() => {
-									if (confirm('Switch exercise? Current sets will be reset.')) {
-										slots = slots.map((s, si) => si === currentSlotIndex ? { ...s, chosenIndex: i } : s);
-										currentSetIndex = 0;
-									}
-								}}
+								onclick={() => switchToAlternative(i)}
 								class="rounded-full px-2 py-0.5 text-xs transition-colors
-									{slots[currentSlotIndex].chosenIndex === i ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] font-medium' : 'text-[var(--color-muted)] hover:text-[var(--color-foreground)]'}"
+									{slots[currentSlotIndex].currentExerciseIndex === i ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)] font-medium' : 'text-[var(--color-muted)] hover:text-[var(--color-foreground)]'}"
 							>
 								{alt.exerciseName ?? `Alt ${i + 1}`}
 							</button>
@@ -862,7 +859,7 @@
 			{#if currentAlt.exerciseType === 'weights' || currentAlt.exerciseType === 'bodyweight'}
 				{#if currentSet}
 					<!-- Previous set hint -->
-					{@const prevSets = previousSetData[currentAlt.exerciseId]}
+					{@const prevSets = previousSetData[currentSet.exerciseId]}
 					{#if prevSets && prevSets[currentSetIndex]}
 						<p class="mb-3 text-xs text-[var(--color-muted)]">
 							Last time: {displayWeight(prevSets[currentSetIndex].weight)}{weightLabel} × {prevSets[currentSetIndex].reps}
@@ -914,11 +911,14 @@
 						Complete Set {currentSetIndex + 1}
 					</button>
 
-					<!-- Previous sets history -->
-					{#if currentAlt.sets.length > 1}
+					<!-- Sets history — each set shows which exercise it was done with -->
+					{@const slotSets = slots[currentSlotIndex].sets}
+					{#if slotSets.length > 1}
 						<div class="space-y-1.5">
 							<p class="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">This workout</p>
-							{#each currentAlt.sets as set, si}
+							{#each slotSets as set, si}
+								{@const setExercise = findExercise(set.exerciseId, customExercises)}
+								{@const setTimeBased = setExercise ? isTimeBased(setExercise) : false}
 								<button
 									onclick={() => { currentSetIndex = si; }}
 									class="flex w-full items-center gap-3 rounded-lg px-3 py-2 transition-colors
@@ -927,11 +927,12 @@
 									<span class="w-14 text-left text-xs text-[var(--color-muted)]">Set {si + 1}</span>
 									{#if set.completed}
 										<span class="flex-1 text-sm text-[var(--color-foreground)]">
-											{isTimeBased_ ? `${set.durationSeconds ?? 0}s` : `${displayWeight(set.weight)}${weightLabel} × ${set.reps}`}
+											{setTimeBased ? `${set.durationSeconds ?? 0}s` : `${displayWeight(set.weight)}${weightLabel} × ${set.reps}`}
 										</span>
+										<span class="text-xs text-[var(--color-muted)]">{set.exerciseName}</span>
 										<Check class="h-4 w-4 flex-shrink-0 text-[var(--color-accent)]" />
 									{:else}
-										<span class="flex-1 text-xs text-[var(--color-muted)]">Not logged</span>
+										<span class="flex-1 text-xs text-[var(--color-muted)]">{set.exerciseName}</span>
 									{/if}
 								</button>
 							{/each}
@@ -1039,7 +1040,12 @@
 			<!-- Slot dots -->
 			<div class="flex gap-1.5">
 				{#each slots as slot, i}
-					{@const isDone = slot.chosenIndex !== null && (() => { const a = slot.alternatives[slot.chosenIndex!]; if (!a) return false; if (a.exerciseType === 'weights' || a.exerciseType === 'bodyweight') return a.sets.every(s => s.completed); return (a as any).completed; })()}
+					{@const slotAlt = slot.alternatives[slot.currentExerciseIndex]}
+					{@const isDone = slotAlt ? (
+						(slotAlt.exerciseType === 'weights' || slotAlt.exerciseType === 'bodyweight')
+							? slot.sets.length > 0 && slot.sets.every(s => s.completed)
+							: (slotAlt as any).completed
+					) : false}
 					<button onclick={() => goToSlot(i)} class="h-2 rounded-full transition-all {i === currentSlotIndex ? 'w-6 bg-[var(--color-primary)]' : isDone ? 'w-2 bg-[var(--color-accent)]' : 'w-2 bg-[var(--color-border)]'}"></button>
 				{/each}
 			</div>
@@ -1064,8 +1070,6 @@
 	</div>
 
 </div>
-
-{/if}
 
 <!-- ── Rest Timer (full-screen overlay) ─────────────────────────────────── -->
 {#if showRestTimer}
@@ -1113,9 +1117,13 @@
 		</div>
 		<div class="flex-1 overflow-y-auto px-4 py-4 space-y-2" role="list" aria-label="Exercises in this workout">
 			{#each slots as slot, si}
-				{@const ci = slot.chosenIndex}
-				{@const alt = ci !== null ? slot.alternatives[ci] : null}
-				{@const isDone = alt ? (() => { if (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight') return alt.sets.every(s => s.completed); return (alt as any).completed; })() : false}
+				{@const ci = slot.currentExerciseIndex}
+				{@const alt = slot.alternatives[ci] ?? null}
+				{@const isDone = alt ? (
+					(alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight')
+						? slot.sets.length > 0 && slot.sets.every(s => s.completed)
+						: (alt as any).completed
+				) : false}
 				<div
 					class="fitness-card flex items-stretch gap-1 transition-all
 						{si === currentSlotIndex ? 'border-[var(--color-primary)]/60' : ''}
@@ -1150,10 +1158,8 @@
 								<p class="truncate font-medium text-[var(--color-foreground)]">
 									{alt ? (alt.exerciseName ?? alt.exerciseId) : (slot.alternatives[0]?.exerciseName ?? '—')}
 								</p>
-								{#if slot.chosenIndex === null && slot.alternatives.length > 1}
-									<p class="text-xs text-[var(--color-warning)]">Choose exercise →</p>
-								{:else if alt && (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight')}
-									<p class="text-xs text-[var(--color-muted)]">{alt.sets.filter(s => s.completed).length}/{alt.sets.length} sets</p>
+								{#if alt && (alt.exerciseType === 'weights' || alt.exerciseType === 'bodyweight')}
+									<p class="text-xs text-[var(--color-muted)]">{slot.sets.filter(s => s.completed).length}/{slot.sets.length} sets</p>
 								{/if}
 							</div>
 							{#if isDone}<Check class="h-4 w-4 flex-shrink-0 text-[var(--color-accent)]" />{/if}

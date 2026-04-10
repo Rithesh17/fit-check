@@ -20,7 +20,7 @@ export const RECENT_EXERCISES_LIMIT = 8;
 export const RECENT_WORKOUTS_LIMIT = 3;
 
 // ─── Active workout store ─────────────────────────────────────────────────────
-export const ACTIVE_WORKOUT_SCHEMA_VERSION = 3;
+export const ACTIVE_WORKOUT_SCHEMA_VERSION = 4;
 export const ACTIVE_WORKOUT_STORAGE_KEY = 'activeWorkout';
 
 // ─── Timer / sound ────────────────────────────────────────────────────────────

@@ -19,16 +19,22 @@ export type ActiveWorkoutSet = {
 	weight: number;
 	rest: number;
 	completed: boolean;
+	exerciseId: string;    // which exercise this set was performed with
+	exerciseName: string;  // display name (denormalised for fast rendering)
 	notes?: string;
 	durationSeconds?: number;
 };
 
+/**
+ * An alternative is now pure exercise metadata — no sets stored here.
+ * Sets live at the slot level (ActiveWorkoutSlot.sets) and each set
+ * carries its own exerciseId so swapping mid-slot is lossless.
+ */
 export type ActiveSlotAlternative =
 	| {
 			exerciseId: string;
 			exerciseName?: string;
 			exerciseType: 'weights' | 'bodyweight';
-			sets: ActiveWorkoutSet[];
 	  }
 	| {
 			exerciseId: string;
@@ -49,12 +55,15 @@ export type ActiveSlotAlternative =
 
 /**
  * A slot is one position in the workout.
- * It carries 1..N alternatives; chosenIndex is null until the user picks one.
- * Single-alternative slots skip the picker and go straight to logging.
+ * - alternatives: pool of exercises the user can pick from (pills).
+ * - currentExerciseIndex: which alternative is active for upcoming sets.
+ * - sets: the actual logged sets. Each set knows which exercise it used,
+ *   so switching alternatives mid-slot is non-destructive.
  */
 export type ActiveWorkoutSlot = {
 	alternatives: ActiveSlotAlternative[];
-	chosenIndex: number | null; // null = not yet chosen (picker will show)
+	currentExerciseIndex: number;
+	sets: ActiveWorkoutSet[]; // weights/bodyweight only; empty for cardio/stretches
 };
 
 export type ActiveWorkoutPayload = {
