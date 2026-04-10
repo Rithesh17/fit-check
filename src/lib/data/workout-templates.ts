@@ -533,35 +533,100 @@ export const workoutTemplates: WorkoutTemplate[] = [
 		]
 	},
 
-	// UPPER PULL — vertical + horizontal + scap work; three curl angles
+	// UPPER PULL — all back regions, all three bicep heads, brachialis/brachioradialis
 	{
 		id: 'upper-pull',
 		name: 'Upper Pull',
-		description: 'Back and biceps — vertical pull, row, scap work, then three curl variations',
-		muscleGroups: ['back', 'biceps'],
+		description:
+			'Back (upper lats, lower lats, rhomboids/traps, posterior delt) + biceps (long head, short head, brachialis) — eight lifts',
+		muscleGroups: ['back', 'biceps', 'forearms'],
 		slots: [
+			// Slot 1: Vertical pull — upper lats, width
 			{
 				alternatives: [
 					{
 						exerciseId: 'pull-ups',
-						sets: 4,
+						sets: 3,
 						reps: 'max reps',
 						restSeconds: 120,
-						notes: 'Vertical pull — lats; assisted or band if needed'
+						notes: 'Vertical pull — upper lats, teres major; assisted or band if needed'
+					},
+					{
+						exerciseId: 'lat-pulldown',
+						sets: 3,
+						reps: '8-10',
+						restSeconds: 90,
+						notes: 'Same vertical pull pattern, loadable'
+					},
+					{
+						exerciseId: 'neutral-grip-pull-up',
+						sets: 3,
+						reps: 'max reps',
+						restSeconds: 120,
+						notes: 'Palms facing — shifts emphasis to lower lats and brachialis'
 					}
 				]
 			},
+			// Slot 2: Horizontal pull — rhomboids, middle traps, thickness
 			{
 				alternatives: [
 					{
 						exerciseId: 'one-arm-dumbbell-row',
-						sets: 4,
-						reps: 8,
+						sets: 3,
+						reps: '8-10',
 						restSeconds: 90,
-						notes: 'Horizontal pull — thickness, rhomboids, lats'
+						notes: 'Full ROM — elbow past torso for complete rhomboid/middle-trap activation'
+					},
+					{
+						exerciseId: 'barbell-row',
+						sets: 3,
+						reps: '6-8',
+						restSeconds: 120,
+						notes: 'Heavy horizontal pull; retract scapulae at top'
+					},
+					{
+						exerciseId: 'seated-cable-row',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 90,
+						notes: 'Constant tension; close-grip targets lower lats too'
+					},
+					{
+						exerciseId: 't-bar-row',
+						sets: 3,
+						reps: '8-10',
+						restSeconds: 90,
+						notes: 'Chest supported option; heavy mid-back loading'
+					},
+					{
+						exerciseId: 'chest-supported-row',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 90,
+						notes: 'No lower-back involvement — pure rhomboid and mid-trap isolation'
 					}
 				]
 			},
+			// Slot 3: Lower lat isolation — straight-arm (no bicep drive)
+			{
+				alternatives: [
+					{
+						exerciseId: 'straight-arm-pulldown',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Arms locked straight — isolates lower lats through shoulder extension alone'
+					},
+					{
+						exerciseId: 'dumbbell-pullover',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Full overhead stretch — lower lats + serratus anterior'
+					}
+				]
+			},
+			// Slot 4: Posterior chain — rear delt, external rotators, lower/middle traps
 			{
 				alternatives: [
 					{
@@ -569,32 +634,32 @@ export const workoutTemplates: WorkoutTemplate[] = [
 						sets: 3,
 						reps: '15-20',
 						restSeconds: 60,
-						notes: 'External rotation at end; rope to face'
-					}
-				]
-			},
-			{
-				alternatives: [
+						notes: 'Pull to forehead with external rotation — posterior delt + infraspinatus + lower traps'
+					},
 					{
-						exerciseId: 'hammer-curl',
+						exerciseId: 'rear-delt-flyes',
 						sets: 3,
-						reps: '10-12',
+						reps: '12-15',
 						restSeconds: 60,
-						notes: 'Brachialis and neutral grip'
-					}
-				]
-			},
-			{
-				alternatives: [
+						notes: 'Bent-over fly — posterior delt isolation'
+					},
 					{
-						exerciseId: 'incline-dumbbell-curl',
+						exerciseId: 'reverse-pec-deck',
 						sets: 3,
-						reps: '8-10',
+						reps: '15',
 						restSeconds: 60,
-						notes: 'Arms behind body; long-head emphasis'
+						notes: 'Machine — best posterior delt isolation, no balance demand'
+					},
+					{
+						exerciseId: 'band-pull-apart',
+						sets: 3,
+						reps: '15-20',
+						restSeconds: 45,
+						notes: 'Bodyweight — posterior delt and external rotators; great shoulder health'
 					}
 				]
 			},
+			// Slot 5: Bicep overall — both heads, supinated
 			{
 				alternatives: [
 					{
@@ -602,7 +667,92 @@ export const workoutTemplates: WorkoutTemplate[] = [
 						sets: 3,
 						reps: '10-12',
 						restSeconds: 60,
-						notes: 'Standing; supinated, full ROM'
+						notes: 'Standing supinated — full ROM, both heads'
+					},
+					{
+						exerciseId: 'barbell-curl',
+						sets: 3,
+						reps: '8-10',
+						restSeconds: 60,
+						notes: 'Barbell — heavier loading, bilateral'
+					},
+					{
+						exerciseId: 'ez-bar-curl',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Semi-supinated grip — easier on wrists, hits both heads'
+					},
+					{
+						exerciseId: 'cable-curl',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Constant tension throughout; squeeze at top'
+					}
+				]
+			},
+			// Slot 6: Bicep long head — arms behind body, maximum stretch
+			{
+				alternatives: [
+					{
+						exerciseId: 'incline-dumbbell-curl',
+						sets: 3,
+						reps: '8-10',
+						restSeconds: 60,
+						notes: 'Bench at 45-60°, arms hang behind torso — maximum long-head stretch'
+					}
+				]
+			},
+			// Slot 7: Bicep short head — arms in front, peak contraction
+			{
+				alternatives: [
+					{
+						exerciseId: 'concentration-curl',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Elbow braced on thigh — best short-head and peak isolation'
+					},
+					{
+						exerciseId: 'preacher-curl',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Arm supported in front — short head emphasis, removes cheat'
+					}
+				]
+			},
+			// Slot 8: Brachialis + brachioradialis — neutral/reverse grip
+			{
+				alternatives: [
+					{
+						exerciseId: 'hammer-curl',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Neutral grip — brachialis and brachioradialis'
+					},
+					{
+						exerciseId: 'reverse-curl',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Pronated grip — brachioradialis and forearm extensors'
+					},
+					{
+						exerciseId: 'cross-body-hammer-curl',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Curl across body — emphasises brachialis over brachioradialis'
+					},
+					{
+						exerciseId: 'cable-hammer-curl',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Rope attachment — constant tension on brachialis and brachioradialis'
 					}
 				]
 			}

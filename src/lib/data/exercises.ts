@@ -385,6 +385,66 @@ export const exercises: Exercise[] = [
 		defaultRestSeconds: 60,
 		instructions: 'Pull to face level, external rotation at end'
 	},
+	{
+		id: 'straight-arm-pulldown',
+		name: 'Straight-Arm Pulldown',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'back',
+		muscleGroups: ['back'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Arms straight throughout, hinge at shoulder only — isolates lower lats without bicep drive'
+	},
+	{
+		id: 'dumbbell-pullover',
+		name: 'Dumbbell Pullover',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'back',
+		muscleGroups: ['back', 'chest'],
+		equipment: 'Dumbbell',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Lie across bench, arc dumbbell overhead to full stretch — lower lats and serratus anterior'
+	},
+	{
+		id: 'chest-supported-row',
+		name: 'Chest-Supported Row',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'back',
+		muscleGroups: ['back', 'biceps'],
+		equipment: 'Dumbbell',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 90,
+		instructions: 'Lie chest-down on incline bench, row dumbbells — no lower back involvement, full rhomboid/mid-trap focus'
+	},
+	{
+		id: 'neutral-grip-pull-up',
+		name: 'Neutral-Grip Pull-up',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'back',
+		muscleGroups: ['back', 'biceps'],
+		equipment: 'Pull-up Bar',
+		defaultSets: 3,
+		defaultReps: 8,
+		defaultRestSeconds: 120,
+		instructions: 'Palms facing each other, elbows tucked — shifts emphasis to lower lats and brachialis'
+	},
+	{
+		id: 'band-pull-apart',
+		name: 'Band Pull-Apart',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'back',
+		muscleGroups: ['back', 'shoulders'],
+		equipment: 'Resistance Band',
+		defaultSets: 3,
+		defaultReps: 15,
+		defaultRestSeconds: 45,
+		instructions: 'Arms straight, pull band apart at chest height — posterior delt and external rotators, great shoulder health work'
+	},
 
 	// SHOULDER EXERCISES
 	{
@@ -609,6 +669,66 @@ export const exercises: Exercise[] = [
 		defaultReps: 10,
 		defaultRestSeconds: 60,
 		instructions: 'Isolated bicep work, controlled tempo'
+	},
+	{
+		id: 'concentration-curl',
+		name: 'Concentration Curl',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'biceps',
+		muscleGroups: ['biceps'],
+		equipment: 'Dumbbell',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Elbow braced on inner thigh, curl to full contraction — best short-head and peak isolation'
+	},
+	{
+		id: 'ez-bar-curl',
+		name: 'EZ-Bar Curl',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'biceps',
+		muscleGroups: ['biceps', 'forearms'],
+		equipment: 'Barbell',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 60,
+		instructions: 'Semi-supinated grip reduces wrist strain vs straight bar — hits both bicep heads'
+	},
+	{
+		id: 'reverse-curl',
+		name: 'Reverse Curl',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'biceps',
+		muscleGroups: ['biceps', 'forearms'],
+		equipment: 'Barbell',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Overhand/pronated grip — shifts load to brachioradialis and forearm extensors'
+	},
+	{
+		id: 'cross-body-hammer-curl',
+		name: 'Cross-Body Hammer Curl',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'biceps',
+		muscleGroups: ['biceps', 'forearms'],
+		equipment: 'Dumbbell',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Curl dumbbell across body to opposite shoulder — emphasises brachialis and brachioradialis'
+	},
+	{
+		id: 'cable-hammer-curl',
+		name: 'Cable Hammer Curl',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'biceps',
+		muscleGroups: ['biceps', 'forearms'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Rope attachment, neutral grip — constant tension on brachialis and brachioradialis throughout'
 	},
 
 	// ARM EXERCISES - TRICEPS
