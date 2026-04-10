@@ -230,25 +230,55 @@ export const workoutTemplates: WorkoutTemplate[] = [
 		]
 	},
 
-	// UPPER PUSH — chest flat + incline, three delt angles, triceps long head
+	// UPPER PUSH — all chest regions, three delt heads, all three tricep heads
 	{
 		id: 'upper-push',
 		name: 'Upper Push',
 		description:
-			'Chest, shoulders, triceps — six lifts (presses cover mid/upper chest and triceps load)',
+			'Chest (upper/mid/lower + fly), shoulders (all three heads), triceps (long + lateral/medial) — eight lifts',
 		muscleGroups: ['chest', 'shoulders', 'triceps'],
 		slots: [
+			// Slot 1: Mid/sternal chest — horizontal press
 			{
 				alternatives: [
 					{
 						exerciseId: 'dumbbell-bench-press',
-						sets: 4,
+						sets: 3,
 						reps: '6-8',
 						restSeconds: 120,
 						notes: 'Mid/sternal chest; heavy compound'
+					},
+					{
+						exerciseId: 'bench-press',
+						sets: 3,
+						reps: '6-8',
+						restSeconds: 120,
+						notes: 'Barbell; heavier loading, same mid-chest target'
+					},
+					{
+						exerciseId: 'machine-chest-press',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 90,
+						notes: 'Fixed path; good for high-rep isolation'
+					},
+					{
+						exerciseId: 'cable-chest-press',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 90,
+						notes: 'Constant tension throughout full ROM'
+					},
+					{
+						exerciseId: 'push-ups',
+						sets: 3,
+						reps: 'max reps',
+						restSeconds: 60,
+						notes: 'Bodyweight horizontal push'
 					}
 				]
 			},
+			// Slot 2: Upper/clavicular chest — incline press
 			{
 				alternatives: [
 					{
@@ -257,20 +287,144 @@ export const workoutTemplates: WorkoutTemplate[] = [
 						reps: '8-10',
 						restSeconds: 90,
 						notes: '30-45°; clavicular chest fibers'
+					},
+					{
+						exerciseId: 'incline-bench-press',
+						sets: 3,
+						reps: '8-10',
+						restSeconds: 90,
+						notes: 'Barbell incline; heavier loading'
+					},
+					{
+						exerciseId: 'incline-machine-press',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 90,
+						notes: 'Machine; controlled path for upper chest'
+					},
+					{
+						exerciseId: 'decline-push-up',
+						sets: 3,
+						reps: 'max reps',
+						restSeconds: 60,
+						notes: 'Feet elevated; bodyweight upper chest'
+					},
+					{
+						exerciseId: 'low-to-high-cable-fly',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Constant tension; best cable option for upper chest'
 					}
 				]
 			},
+			// Slot 3: Lower/costal chest — chest dips
+			{
+				alternatives: [
+					{
+						exerciseId: 'chest-dips',
+						sets: 3,
+						reps: 'max reps',
+						restSeconds: 90,
+						notes: 'Torso forward ~30°; lower pec + lateral/medial tricep'
+					},
+					{
+						exerciseId: 'decline-barbell-press',
+						sets: 3,
+						reps: '8-10',
+						restSeconds: 90,
+						notes: 'Decline angle; most direct lower pec loading'
+					},
+					{
+						exerciseId: 'decline-dumbbell-press',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 90,
+						notes: 'Decline; greater ROM per side'
+					},
+					{
+						exerciseId: 'high-to-low-cable-fly',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Cable from high anchor; isolates lower costal fibers'
+					},
+					{
+						exerciseId: 'decline-dumbbell-fly',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Decline fly; lower pec stretch + adduction'
+					}
+				]
+			},
+			// Slot 4: Chest adduction/stretch — fly
+			{
+				alternatives: [
+					{
+						exerciseId: 'dumbbell-flyes',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Mid chest; full stretch at long muscle length'
+					},
+					{
+						exerciseId: 'cable-crossovers',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Constant tension through full adduction ROM'
+					},
+					{
+						exerciseId: 'pec-deck',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Machine; consistent resistance curve, great isolation'
+					},
+					{
+						exerciseId: 'incline-dumbbell-fly',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Shifts stretch to upper/clavicular chest'
+					}
+				]
+			},
+			// Slot 5: Anterior delt — overhead press
 			{
 				alternatives: [
 					{
 						exerciseId: 'dumbbell-shoulder-press',
 						sets: 3,
-						reps: '6-8',
+						reps: '8-10',
 						restSeconds: 90,
 						notes: 'Anterior delts; seated or standing'
+					},
+					{
+						exerciseId: 'overhead-press',
+						sets: 3,
+						reps: '6-8',
+						restSeconds: 120,
+						notes: 'Barbell OHP; highest load ceiling'
+					},
+					{
+						exerciseId: 'arnold-press',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 90,
+						notes: 'Rotation adds broader anterior + medial delt recruitment'
+					},
+					{
+						exerciseId: 'machine-shoulder-press',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 90,
+						notes: 'Fixed path; stable option under fatigue'
 					}
 				]
 			},
+			// Slot 6: Medial delt — lateral raise
 			{
 				alternatives: [
 					{
@@ -278,21 +432,65 @@ export const workoutTemplates: WorkoutTemplate[] = [
 						sets: 3,
 						reps: '12-15',
 						restSeconds: 60,
-						notes: 'Lateral delts'
-					}
-				]
-			},
-			{
-				alternatives: [
+						notes: 'Medial delt isolation'
+					},
 					{
-						exerciseId: 'rear-delt-fly',
+						exerciseId: 'cable-lateral-raise',
 						sets: 3,
 						reps: '12-15',
 						restSeconds: 60,
-						notes: 'Posterior delts; bent-over'
+						notes: 'Constant tension at bottom of ROM; single arm'
+					},
+					{
+						exerciseId: 'machine-lateral-raise',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Most consistent resistance curve'
+					},
+					{
+						exerciseId: 'upright-row',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Wide grip; medial delt + upper traps'
 					}
 				]
 			},
+			// Slot 7: Posterior delt — rear delt fly
+			{
+				alternatives: [
+					{
+						exerciseId: 'rear-delt-flyes',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Posterior delts; bent-over dumbbell'
+					},
+					{
+						exerciseId: 'reverse-pec-deck',
+						sets: 3,
+						reps: '15',
+						restSeconds: 60,
+						notes: 'Machine; best isolation, no balance demand'
+					},
+					{
+						exerciseId: 'cable-rear-delt-fly',
+						sets: 3,
+						reps: '15',
+						restSeconds: 60,
+						notes: 'Single arm cable; constant tension on posterior delt'
+					},
+					{
+						exerciseId: 'face-pulls',
+						sets: 3,
+						reps: '15-20',
+						restSeconds: 60,
+						notes: 'Also trains external rotators; shoulder health bonus'
+					}
+				]
+			},
+			// Slot 8: Tricep long head — overhead extension
 			{
 				alternatives: [
 					{
@@ -300,7 +498,35 @@ export const workoutTemplates: WorkoutTemplate[] = [
 						sets: 3,
 						reps: '10-12',
 						restSeconds: 60,
-						notes: 'Long head of triceps'
+						notes: 'Long head; shoulder flexion maximises stretch'
+					},
+					{
+						exerciseId: 'skull-crushers',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Barbell; heavy loading, long head stretch on flat bench'
+					},
+					{
+						exerciseId: 'dumbbell-skull-crushers',
+						sets: 3,
+						reps: '10-12',
+						restSeconds: 60,
+						notes: 'Greater ROM per arm; addresses imbalances'
+					},
+					{
+						exerciseId: 'cable-overhead-tricep-extension',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Constant tension on long head throughout'
+					},
+					{
+						exerciseId: 'single-arm-overhead-tricep-extension',
+						sets: 3,
+						reps: '12-15',
+						restSeconds: 60,
+						notes: 'Unilateral; fixes left/right imbalances'
 					}
 				]
 			}
@@ -478,8 +704,8 @@ export function templateToActiveSlots(
 
 			return {
 				alternatives: alts,
-				// Single-alternative slots are auto-chosen; multi-alternative slots wait for user pick
-				chosenIndex: alts.length === 1 ? 0 : null
+				// Always default to primary (index 0); user can swap during the workout
+				chosenIndex: 0
 			};
 		})
 		.filter((s): s is ActiveWorkoutSlot => s !== null);

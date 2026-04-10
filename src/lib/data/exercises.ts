@@ -153,6 +153,138 @@ export const exercises: Exercise[] = [
 		defaultRestSeconds: 60,
 		instructions: '30-45° bench, wide arc, stretch at bottom, squeeze upper chest'
 	},
+	{
+		id: 'chest-dips',
+		name: 'Chest Dips',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest', 'triceps', 'shoulders'],
+		equipment: 'Dip Bar',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 90,
+		instructions: 'Lean torso forward ~30°, elbows slightly flared, lower until stretch in lower chest, press back up'
+	},
+	{
+		id: 'machine-chest-press',
+		name: 'Machine Chest Press',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest', 'triceps', 'shoulders'],
+		equipment: 'Machine',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 90,
+		instructions: 'Fixed path, drive handles forward, squeeze chest at full extension'
+	},
+	{
+		id: 'cable-chest-press',
+		name: 'Cable Chest Press',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest', 'triceps', 'shoulders'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 90,
+		instructions: 'Cables at chest height, press forward, constant tension throughout ROM'
+	},
+	{
+		id: 'incline-machine-press',
+		name: 'Incline Machine Press',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest', 'triceps', 'shoulders'],
+		equipment: 'Machine',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 90,
+		instructions: '30-45° incline, press handles upward, squeeze upper chest at top'
+	},
+	{
+		id: 'decline-push-up',
+		name: 'Decline Push-up',
+		exerciseType: 'bodyweight',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest', 'triceps', 'shoulders'],
+		equipment: 'Bodyweight',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Feet elevated on bench, hands on floor, shifts load to upper/clavicular chest'
+	},
+	{
+		id: 'low-to-high-cable-fly',
+		name: 'Low-to-High Cable Fly',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Cables anchored low, sweep upward and inward — best constant-tension upper chest fly'
+	},
+	{
+		id: 'decline-barbell-press',
+		name: 'Decline Barbell Press',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest', 'triceps', 'shoulders'],
+		equipment: 'Barbell',
+		defaultSets: 3,
+		defaultReps: 8,
+		defaultRestSeconds: 90,
+		instructions: '15-30° decline bench, lower bar to lower chest, press explosively'
+	},
+	{
+		id: 'decline-dumbbell-press',
+		name: 'Decline Dumbbell Press',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest', 'triceps', 'shoulders'],
+		equipment: 'Dumbbell',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 90,
+		instructions: 'Decline bench, lower dumbbells to lower chest, greater ROM per side'
+	},
+	{
+		id: 'high-to-low-cable-fly',
+		name: 'High-to-Low Cable Fly',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Cables anchored high, sweep downward and inward — isolates lower/costal chest fibers'
+	},
+	{
+		id: 'decline-dumbbell-fly',
+		name: 'Decline Dumbbell Fly',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest'],
+		equipment: 'Dumbbell',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Decline bench, wide arc, stretch at bottom — lower pec adduction'
+	},
+	{
+		id: 'pec-deck',
+		name: 'Pec Deck',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'chest',
+		muscleGroups: ['chest'],
+		equipment: 'Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Guided arc, squeeze pecs hard at peak contraction, control the stretch'
+	},
 
 	// BACK EXERCISES
 	{
@@ -330,6 +462,78 @@ export const exercises: Exercise[] = [
 		defaultRestSeconds: 90,
 		instructions: 'Start with palms facing, rotate and press'
 	},
+	{
+		id: 'machine-shoulder-press',
+		name: 'Machine Shoulder Press',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'shoulders',
+		muscleGroups: ['shoulders', 'triceps'],
+		equipment: 'Machine',
+		defaultSets: 3,
+		defaultReps: 10,
+		defaultRestSeconds: 90,
+		instructions: 'Fixed path, press overhead, stable option for high-rep work'
+	},
+	{
+		id: 'cable-lateral-raise',
+		name: 'Cable Lateral Raise',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'shoulders',
+		muscleGroups: ['shoulders'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 15,
+		defaultRestSeconds: 60,
+		instructions: 'Single arm, cable at hip level, raise to shoulder height — constant tension vs dumbbell'
+	},
+	{
+		id: 'machine-lateral-raise',
+		name: 'Machine Lateral Raise',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'shoulders',
+		muscleGroups: ['shoulders'],
+		equipment: 'Machine',
+		defaultSets: 3,
+		defaultReps: 15,
+		defaultRestSeconds: 60,
+		instructions: 'Guided arc, most consistent resistance curve for medial delt isolation'
+	},
+	{
+		id: 'upright-row',
+		name: 'Upright Row',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'shoulders',
+		muscleGroups: ['shoulders', 'back'],
+		equipment: 'Barbell',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Wide grip (outside shoulder width), pull to chin level, elbows lead — hits medial delt and upper traps'
+	},
+	{
+		id: 'reverse-pec-deck',
+		name: 'Reverse Pec Deck',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'shoulders',
+		muscleGroups: ['shoulders'],
+		equipment: 'Machine',
+		defaultSets: 3,
+		defaultReps: 15,
+		defaultRestSeconds: 60,
+		instructions: 'Face the pad, arms wide, sweep back — best isolation for posterior delt, no balance demand'
+	},
+	{
+		id: 'cable-rear-delt-fly',
+		name: 'Cable Rear Delt Fly',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'shoulders',
+		muscleGroups: ['shoulders'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 15,
+		defaultRestSeconds: 60,
+		instructions: 'Single arm, cable at face height, pull across body horizontally — constant tension on posterior delt'
+	},
 
 	// ARM EXERCISES - BICEPS
 	{
@@ -480,6 +684,30 @@ export const exercises: Exercise[] = [
 		defaultRestSeconds: 90,
 		instructions: 'Lower dumbbells to forehead, extend elbows',
 		videoUrl: 'https://youtu.be/N5ImCU0mcpo?si=L2ShX2DFzPF0FmZw'
+	},
+	{
+		id: 'cable-overhead-tricep-extension',
+		name: 'Cable Overhead Tricep Extension',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'triceps',
+		muscleGroups: ['triceps'],
+		equipment: 'Cable Machine',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'Face away from cable, arms overhead, extend fully — constant tension on long head'
+	},
+	{
+		id: 'single-arm-overhead-tricep-extension',
+		name: 'Single-Arm Overhead Tricep Extension',
+		exerciseType: 'weights',
+		primaryMuscleGroup: 'triceps',
+		muscleGroups: ['triceps'],
+		equipment: 'Dumbbell',
+		defaultSets: 3,
+		defaultReps: 12,
+		defaultRestSeconds: 60,
+		instructions: 'One arm overhead, elbow points up, lower behind head — addresses side-to-side imbalances'
 	},
 
 	// LEG EXERCISES - QUADRICEPS
