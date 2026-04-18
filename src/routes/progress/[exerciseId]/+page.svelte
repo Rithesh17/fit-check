@@ -193,12 +193,12 @@
 				</div>
 			</div>
 
-			<!-- All Sessions Table -->
+			<!-- Last 5 Sessions Table -->
 			{#if sessions.length > 0}
 				<div class="fitness-card">
-					<h3 class="font-semibold text-[var(--color-foreground)] mb-4">All Sessions</h3>
+					<h3 class="font-semibold text-[var(--color-foreground)] mb-4">Recent Sessions</h3>
 					<div class="space-y-2">
-						{#each sessions as session}
+						{#each sessions.slice(0, 5) as session}
 							<div class="flex items-center justify-between p-3 bg-[var(--color-card-hover)] rounded-lg">
 								<span class="text-sm text-[var(--color-muted)] w-24 flex-shrink-0">{formatDate(session.date)}</span>
 								<div class="flex gap-3 text-sm text-right">

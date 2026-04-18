@@ -31,7 +31,7 @@
 		type ActiveSlotAlternative
 	} from '$lib/stores/active-workout';
 	import { loadCustomExercises, findExercise, type CustomExercise } from '$lib/services/exercises';
-	import { convertWeight, getWeightUnitLabel, kgToLbs } from '$lib/utils/weight-conversion';
+	import { convertWeight, getWeightUnitLabel, kgToLbs, lbsToKg } from '$lib/utils/weight-conversion';
 	import { unitPreference } from '$lib/stores/unit-preference';
 	import {
 		DEFAULT_REST_BETWEEN_EXERCISES,
@@ -78,6 +78,13 @@
 
 	// Autofill
 	let previousSetData = $state<Record<string, Array<{ reps: number; weight: number }>>>({});
+
+	// Raw string state for weight input to allow intermediate decimal typing (e.g. "40.")
+	let weightRaw = $state('');
+	let weightInputFocused = $state(false);
+	$effect(() => {
+		if (!weightInputFocused) weightRaw = currentSet ? displayWeight(currentSet.weight) : '';
+	});
 
 	// Cardio / set timers
 	let cardioTimerSeconds = $state(0);
@@ -716,7 +723,7 @@
 
 	function parseWeight(v: string): number {
 		const f = parseFloat(v) || 0;
-		if (currentUnit === 'lbs') return Math.round((f / 2.20462) * 10) / 10;
+		if (currentUnit === 'lbs') return Math.round(lbsToKg(f) * 10000) / 10000;
 		return f;
 	}
 
@@ -884,9 +891,18 @@
 							<div>
 								<p class="mb-2 text-center text-sm font-medium text-[var(--color-muted)]">{weightLabel}</p>
 								<input
-									type="number" min="0" step="0.5"
-									value={displayWeight(currentSet.weight)}
-									oninput={(e) => updateSetField('weight', parseWeight((e.target as HTMLInputElement).value))}
+									type="text" inputmode="decimal" min="0"
+									value={weightRaw}
+									onfocus={() => { weightInputFocused = true; }}
+									oninput={(e) => {
+										weightRaw = (e.target as HTMLInputElement).value;
+										const f = parseFloat(weightRaw);
+										if (!isNaN(f)) updateSetField('weight', parseWeight(weightRaw));
+									}}
+									onblur={() => {
+										updateSetField('weight', parseWeight(weightRaw));
+										weightInputFocused = false;
+									}}
 									class="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-4 text-center text-3xl font-bold text-[var(--color-foreground)] focus:border-[var(--color-primary)] focus:outline-none"
 								/>
 							</div>
