@@ -1,0 +1,40 @@
+# Supabase project configuration for Pulse.
+# project_id links the local config to the hosted project (ref).
+project_id = "rejcmfkdqlkhdtosxpmm"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+# Local dev site URL; the hosted project uses its own Auth → URL configuration.
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+# For a smoother first run, email confirmation is disabled locally.
+# Configure this in the hosted dashboard (Auth → Providers → Email) as you prefer.
+enable_confirmations = false
+
+[analytics]
+enabled = false

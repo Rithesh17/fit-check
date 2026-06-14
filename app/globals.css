@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: #f1ece3;
+  color: #1a1712;
+  font-family: var(--font-hanken), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #ff5a3c;
+  color: #fff;
+}
+
+/* hide scrollbars on horizontal/vertical scroll strips, keep scrollability */
+.scrollx::-webkit-scrollbar {
+  height: 0;
+}
+.scrolly::-webkit-scrollbar {
+  width: 0;
+}
+.scrollx,
+.scrolly {
+  scrollbar-width: none;
+}
+
+/* number inputs: strip spinners */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+@layer utilities {
+  .kicker {
+    font-family: var(--font-jetbrains), ui-monospace, monospace;
+    font-weight: 600;
+    font-size: 10.5px;
+    line-height: 1;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #a39b8b;
+  }
+  .mono {
+    font-family: var(--font-jetbrains), ui-monospace, monospace;
+  }
+  .display {
+    font-family: var(--font-bricolage), system-ui, sans-serif;
+    letter-spacing: -0.025em;
+  }
+}
