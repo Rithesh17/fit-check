@@ -1,19 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUnits } from "@/lib/units";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Kicker, BigNum, Chip } from "@/components/ui";
+import { InfoButton } from "@/components/exercise/ExerciseInfo";
+import { PlateCalc } from "@/components/tools/Calculators";
 import { fmtClock } from "@/lib/format";
 import type { WorkoutType } from "@/lib/types";
 
-interface LibItem {
+export interface LibItem {
   id: string;
   name: string;
   category: string;
   equipment: string;
   target: string | null;
+  is_cardio: boolean;
+  default_sets: number | null;
+  default_reps: number | null;
+  default_weight_lb: number | null;
 }
 interface SetRow {
   w: number; // canonical lb
@@ -28,16 +34,51 @@ interface ExEntry {
   sets: SetRow[];
 }
 
-const REST_SECONDS = 90;
+export interface InitialConfig {
+  type: WorkoutType;
+  title?: string;
+  exercises?: {
+    exercise_id: string;
+    name: string;
+    target: string | null;
+    sets: { w: number; r: number; done?: boolean }[];
+  }[];
+  distance?: string;
+  durationMin?: string;
+  kcal?: string;
+  rallies?: string;
+  score?: string;
+}
 
-export function LogWorkout({ lib }: { lib: LibItem[] }) {
+const REST_SECONDS = 90;
+let keySeq = 0;
+const nextKey = () => `e${Date.now()}_${keySeq++}`;
+
+export function LogWorkout({
+  lib,
+  initial,
+  editId,
+}: {
+  lib: LibItem[];
+  initial?: InitialConfig;
+  editId?: string;
+}) {
   const { fmt, imperial } = useUnits();
   const router = useRouter();
 
-  const [type, setType] = useState<WorkoutType>("gym");
-  const [title, setTitle] = useState("");
-  const [exercises, setExercises] = useState<ExEntry[]>([]);
+  const [type, setType] = useState<WorkoutType>(initial?.type ?? "gym");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [exercises, setExercises] = useState<ExEntry[]>(
+    (initial?.exercises ?? []).map((e) => ({
+      key: nextKey(),
+      exercise_id: e.exercise_id,
+      name: e.name,
+      target: e.target,
+      sets: e.sets.map((s) => ({ w: s.w, r: s.r, done: s.done ?? false })),
+    })),
+  );
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [plateFor, setPlateFor] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [rest, setRest] = useState<{ remaining: number; next: string } | null>(
     null,
@@ -45,20 +86,18 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // cardio / racquet fields
-  const [distance, setDistance] = useState("");
-  const [durationMin, setDurationMin] = useState("");
-  const [kcal, setKcal] = useState("");
-  const [rallies, setRallies] = useState("");
-  const [score, setScore] = useState("");
+  const [distance, setDistance] = useState(initial?.distance ?? "");
+  const [durationMin, setDurationMin] = useState(initial?.durationMin ?? "");
+  const [kcal, setKcal] = useState(initial?.kcal ?? "");
+  const [rallies, setRallies] = useState(initial?.rallies ?? "");
+  const [score, setScore] = useState(initial?.score ?? "");
 
-  // elapsed timer
   useEffect(() => {
+    if (editId) return; // no live timer when editing a past workout
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [editId]);
 
-  // rest countdown
   useEffect(() => {
     if (!rest) return;
     if (rest.remaining <= 0) {
@@ -75,24 +114,23 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
   const stepLb = imperial ? 5 : 2.5 / 0.453592;
 
   function addExercise(item: LibItem) {
-    const last = exercises.find((e) => e.exercise_id === item.id);
-    const seed = last?.sets[last.sets.length - 1];
+    const sets = Math.max(1, item.default_sets ?? 1);
+    const w = item.default_weight_lb ?? 45;
+    const r = item.default_reps ?? 10;
     setExercises((xs) => [
       ...xs,
       {
-        key: item.id + ":" + Date.now(),
+        key: nextKey(),
         exercise_id: item.id,
         name: item.name,
         target: item.target,
-        sets: [{ w: seed?.w ?? 45, r: seed?.r ?? 10, done: false }],
+        sets: Array.from({ length: sets }, () => ({ w, r, done: false })),
       },
     ]);
     setPickerOpen(false);
   }
 
-  function update(setFn: (xs: ExEntry[]) => ExEntry[]) {
-    setExercises(setFn);
-  }
+  const update = (fn: (xs: ExEntry[]) => ExEntry[]) => setExercises(fn);
   function addSet(ek: string) {
     update((xs) =>
       xs.map((e) => {
@@ -109,11 +147,18 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
           ? {
               ...e,
               sets: e.sets.map((s, j) =>
-                j === i
-                  ? { ...s, w: Math.max(0, Math.round((s.w + d) * 10) / 10) }
-                  : s,
+                j === i ? { ...s, w: Math.max(0, Math.round((s.w + d) * 10) / 10) } : s,
               ),
             }
+          : e,
+      ),
+    );
+  }
+  function setW(ek: string, i: number, wLb: number) {
+    update((xs) =>
+      xs.map((e) =>
+        e.key === ek
+          ? { ...e, sets: e.sets.map((s, j) => (j === i ? { ...s, w: wLb } : s)) }
           : e,
       ),
     );
@@ -147,13 +192,12 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
         };
       }),
     );
-    if (justDone) {
+    if (justDone && !editId) {
       const ex = exercises.find((e) => e.key === ek);
       setRest({ remaining: REST_SECONDS, next: ex?.name ?? "Next set" });
     }
   }
 
-  // summary
   let vol = 0;
   let done = 0;
   let total = 0;
@@ -181,16 +225,18 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
 
     const dur =
       type === "gym"
-        ? elapsed
+        ? editId
+          ? Math.round((parseFloat(durationMin) || 0) * 60) || elapsed
+          : elapsed
         : Math.round((parseFloat(durationMin) || 0) * 60) || elapsed;
 
     const base: Record<string, unknown> = {
       user_id: user.id,
       type,
       title: title.trim() || defaultTitle(type, exercises),
-      performed_at: new Date().toISOString(),
       duration_sec: dur,
     };
+    if (!editId) base.performed_at = new Date().toISOString();
 
     if (type === "run") {
       const distMi = imperial
@@ -198,7 +244,6 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
         : (parseFloat(distance) || 0) / 1.60934;
       base.distance_mi = Math.round(distMi * 100) / 100;
       base.kcal = parseInt(kcal) || null;
-      // derive pace from distance + duration
       base.pace_spm = distMi > 0 ? Math.round(dur / distMi) : null;
     } else if (type === "racquet") {
       base.kcal = parseInt(kcal) || null;
@@ -207,12 +252,24 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
     }
 
     try {
-      const { data: wk, error: e1 } = await supabase
-        .from("workouts")
-        .insert(base)
-        .select("id")
-        .single();
-      if (e1 || !wk) throw e1 || new Error("Could not save workout");
+      let workoutId = editId;
+      if (editId) {
+        const { error } = await supabase
+          .from("workouts")
+          .update(base)
+          .eq("id", editId);
+        if (error) throw error;
+        // replace children
+        await supabase.from("workout_exercises").delete().eq("workout_id", editId);
+      } else {
+        const { data: wk, error } = await supabase
+          .from("workouts")
+          .insert(base)
+          .select("id")
+          .single();
+        if (error || !wk) throw error || new Error("Could not save workout");
+        workoutId = wk.id;
+      }
 
       if (type === "gym") {
         for (let p = 0; p < exercises.length; p++) {
@@ -220,7 +277,7 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
           const { data: we, error: e2 } = await supabase
             .from("workout_exercises")
             .insert({
-              workout_id: wk.id,
+              workout_id: workoutId,
               exercise_id: ex.exercise_id,
               name: ex.name,
               target: ex.target,
@@ -243,7 +300,7 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
         }
       }
 
-      router.push(`/history/${wk.id}`);
+      router.push(`/history/${workoutId}`);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -260,7 +317,6 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
 
   return (
     <div className="flex flex-col gap-3 animate-popIn">
-      {/* type switch */}
       <div className="scrollx flex gap-2 overflow-x-auto">
         {(["gym", "run", "racquet"] as WorkoutType[]).map((t) => (
           <Chip
@@ -276,17 +332,16 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
         ))}
       </div>
 
-      {/* top bar */}
       <div
         className="sticky top-[78px] z-20 flex items-center justify-between gap-[14px] rounded-card p-[18px] text-white lg:static"
         style={{ background: "linear-gradient(135deg,#1A1712,#2A241B)" }}
       >
         <div className="flex gap-[22px]">
           <div>
-            <Kicker color="#FF8B73">Elapsed</Kicker>
+            <Kicker color="#FF8B73">{editId ? "Editing" : "Elapsed"}</Kicker>
             <div className="mt-[7px]">
               <BigNum size={26} color="#fff">
-                {fmtClock(elapsed)}
+                {editId ? "—" : fmtClock(elapsed)}
               </BigNum>
             </div>
           </div>
@@ -298,10 +353,7 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
                   <BigNum size={26} color="#fff">
                     {fmt.vol(vol)}
                   </BigNum>
-                  <span
-                    className="text-[12px]"
-                    style={{ color: "rgba(255,255,255,.55)" }}
-                  >
+                  <span className="text-[12px]" style={{ color: "rgba(255,255,255,.55)" }}>
                     {fmt.wtU()}
                   </span>
                 </div>
@@ -322,11 +374,10 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
           disabled={!canSave || saving}
           className="self-center whitespace-nowrap rounded-[13px] bg-pulse px-[18px] py-[12px] text-[14px] font-bold text-white disabled:opacity-50"
         >
-          {saving ? "Saving…" : "Finish"}
+          {saving ? "Saving…" : editId ? "Save" : "Finish"}
         </button>
       </div>
 
-      {/* title */}
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
@@ -340,7 +391,6 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
         </div>
       )}
 
-      {/* rest pill */}
       {type === "gym" && rest && (
         <div
           className="flex items-center gap-[10px] rounded-[14px] border px-4 py-3"
@@ -355,13 +405,15 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
               {rest.next}
             </span>
           </div>
-          <div className="display text-[18px] font-bold text-racquet">
+          <button
+            onClick={() => setRest(null)}
+            className="display text-[18px] font-bold text-racquet"
+          >
             {fmtClock(rest.remaining)}
-          </div>
+          </button>
         </div>
       )}
 
-      {/* ===== GYM ===== */}
       {type === "gym" && (
         <>
           {exercises.map((e, ei) => {
@@ -387,10 +439,9 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
                       </div>
                     )}
                   </div>
+                  <InfoButton exerciseId={e.exercise_id} />
                   <button
-                    onClick={() =>
-                      update((xs) => xs.filter((x) => x.key !== e.key))
-                    }
+                    onClick={() => update((xs) => xs.filter((x) => x.key !== e.key))}
                     className="h-[30px] w-[30px] rounded-[8px] bg-sand text-[15px] text-muted"
                     aria-label="Remove exercise"
                   >
@@ -402,20 +453,18 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
                   className="grid items-center gap-2 border-b border-[#F4F0E8] px-[2px] pb-2"
                   style={{ gridTemplateColumns: "26px 1fr 96px 96px 38px" }}
                 >
-                  {["SET", "PREV", fmt.wtU().toUpperCase(), "REPS", ""].map(
-                    (h, i) => (
-                      <div
-                        key={i}
-                        className="mono text-[9.5px] text-faint"
-                        style={{
-                          letterSpacing: ".1em",
-                          textAlign: i >= 2 && i <= 3 ? "center" : "left",
-                        }}
-                      >
-                        {h}
-                      </div>
-                    ),
-                  )}
+                  {["SET", "PREV", fmt.wtU().toUpperCase(), "REPS", ""].map((h, i) => (
+                    <div
+                      key={i}
+                      className="mono text-[9.5px] text-faint"
+                      style={{
+                        letterSpacing: ".1em",
+                        textAlign: i >= 2 && i <= 3 ? "center" : "left",
+                      }}
+                    >
+                      {h}
+                    </div>
+                  ))}
                 </div>
 
                 {e.sets.map((s, i) => (
@@ -430,7 +479,13 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
                     <div className="display text-[13px] font-bold text-muted">
                       {i + 1}
                     </div>
-                    <div className="text-[12px] text-faint">—</div>
+                    <button
+                      onClick={() => setPlateFor(s.w)}
+                      className="text-left text-[12px] text-faint underline-offset-2 hover:underline"
+                      title="Plate calculator"
+                    >
+                      plates
+                    </button>
                     <Stepper
                       value={fmt.wt(s.w)}
                       onMinus={() => stepW(e.key, i, -stepLb)}
@@ -473,41 +528,19 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
         </>
       )}
 
-      {/* ===== RUN ===== */}
       {type === "run" && (
         <Card className="flex flex-col gap-4 p-5">
-          <NumberField
-            label={`Distance (${fmt.distU()})`}
-            value={distance}
-            onChange={setDistance}
-            placeholder="5.0"
-          />
-          <NumberField
-            label="Duration (min)"
-            value={durationMin}
-            onChange={setDurationMin}
-            placeholder="42"
-          />
+          <NumberField label={`Distance (${fmt.distU()})`} value={distance} onChange={setDistance} placeholder="5.0" />
+          <NumberField label="Duration (min)" value={durationMin} onChange={setDurationMin} placeholder="42" />
           <NumberField label="Calories" value={kcal} onChange={setKcal} placeholder="540" />
         </Card>
       )}
 
-      {/* ===== RACQUET ===== */}
       {type === "racquet" && (
         <Card className="flex flex-col gap-4 p-5">
-          <NumberField
-            label="Duration (min)"
-            value={durationMin}
-            onChange={setDurationMin}
-            placeholder="60"
-          />
+          <NumberField label="Duration (min)" value={durationMin} onChange={setDurationMin} placeholder="60" />
           <NumberField label="Calories" value={kcal} onChange={setKcal} placeholder="520" />
-          <NumberField
-            label="Rallies"
-            value={rallies}
-            onChange={setRallies}
-            placeholder="180"
-          />
+          <NumberField label="Rallies" value={rallies} onChange={setRallies} placeholder="180" />
           <label className="block">
             <span className="kicker mb-2 block">Score (e.g. 21-18, 19-21, 21-15)</span>
             <input
@@ -525,16 +558,18 @@ export function LogWorkout({ lib }: { lib: LibItem[] }) {
         disabled={!canSave || saving}
         className="mt-1 w-full rounded-[16px] bg-ink py-[17px] text-[15px] font-bold text-white disabled:opacity-50"
       >
-        {saving ? "Saving…" : "Finish & save workout"}
+        {saving ? "Saving…" : editId ? "Save changes" : "Finish & save workout"}
       </button>
 
-      {/* exercise picker */}
       {pickerOpen && (
         <ExercisePicker
           lib={lib}
           onPick={addExercise}
           onClose={() => setPickerOpen(false)}
         />
+      )}
+      {plateFor != null && (
+        <PlateCalc weightLb={plateFor} onClose={() => setPlateFor(null)} />
       )}
     </div>
   );
@@ -554,17 +589,11 @@ function Stepper({
       className="flex items-center justify-between gap-[2px] rounded-[9px] px-[6px] py-[4px]"
       style={{ background: "#F7F3EC" }}
     >
-      <button
-        onClick={onMinus}
-        className="w-4 text-[15px] font-bold leading-none text-[#B3AB9C]"
-      >
+      <button onClick={onMinus} className="w-4 text-[15px] font-bold leading-none text-[#B3AB9C]">
         −
       </button>
       <span className="display text-[14px] font-semibold text-ink">{value}</span>
-      <button
-        onClick={onPlus}
-        className="w-4 text-[15px] font-bold leading-none text-[#B3AB9C]"
-      >
+      <button onClick={onPlus} className="w-4 text-[15px] font-bold leading-none text-[#B3AB9C]">
         +
       </button>
     </div>
@@ -597,7 +626,7 @@ function NumberField({
   );
 }
 
-function ExercisePicker({
+export function ExercisePicker({
   lib,
   onPick,
   onClose,
@@ -665,7 +694,7 @@ function ExercisePicker({
   );
 }
 
-function defaultTitle(type: WorkoutType, exercises: ExEntry[]) {
+export function defaultTitle(type: WorkoutType, exercises: { name: string }[]) {
   if (type === "run") return "Run";
   if (type === "racquet") return "Match";
   if (exercises.length) return "Strength Session";

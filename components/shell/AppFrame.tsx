@@ -6,6 +6,7 @@ import { UnitsProvider, useUnits } from "@/lib/units";
 import type { Profile } from "@/lib/types";
 import { Logo } from "@/components/Logo";
 import { Icon } from "@/components/Icon";
+import { ExerciseInfoProvider } from "@/components/exercise/ExerciseInfo";
 import { NAV, BOTTOM_ORDER, BOTTOM_LABELS, isActive } from "./nav";
 
 export function AppFrame({
@@ -17,13 +18,15 @@ export function AppFrame({
 }) {
   return (
     <UnitsProvider initial={profile.units}>
-      <div className="flex min-h-[100dvh] justify-center bg-sand">
-        <Sidebar profile={profile} />
-        <div className="flex w-full min-w-0 flex-1 flex-col pb-[96px] lg:max-w-[1200px] lg:pb-0">
-          {children}
+      <ExerciseInfoProvider>
+        <div className="flex min-h-[100dvh] justify-center bg-sand">
+          <Sidebar profile={profile} />
+          <div className="flex w-full min-w-0 flex-1 flex-col pb-[96px] lg:max-w-[1200px] lg:pb-0">
+            {children}
+          </div>
+          <BottomNav />
         </div>
-        <BottomNav />
-      </div>
+      </ExerciseInfoProvider>
     </UnitsProvider>
   );
 }
@@ -76,7 +79,10 @@ function Sidebar({ profile }: { profile: Profile }) {
             KG / KM
           </SegBtn>
         </div>
-        <div className="flex items-center gap-[11px] border-t border-line p-2">
+        <Link
+          href="/account"
+          className="flex items-center gap-[11px] rounded-[10px] border-t border-line p-2 transition-colors hover:bg-sand"
+        >
           <Avatar size={36} />
           <div className="leading-tight">
             <div className="text-[14px] font-semibold">
@@ -85,18 +91,10 @@ function Sidebar({ profile }: { profile: Profile }) {
             <div className="text-[12px] text-muted">
               {profile.streak_days > 0
                 ? `Day ${profile.streak_days} streak`
-                : "Let's begin"}
+                : "View account"}
             </div>
           </div>
-        </div>
-        <form action="/auth/signout" method="post">
-          <button
-            type="submit"
-            className="w-full rounded-[10px] px-2 py-2 text-left text-[12.5px] font-medium text-muted2 transition-colors hover:text-pulse"
-          >
-            Sign out
-          </button>
-        </form>
+        </Link>
       </div>
     </aside>
   );

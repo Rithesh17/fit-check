@@ -9,7 +9,13 @@ export type IconName =
   | "grid"
   | "plus"
   | "run"
-  | "racquet";
+  | "racquet"
+  | "info"
+  | "edit"
+  | "trash"
+  | "play"
+  | "flame"
+  | "target";
 
 const PATHS: Record<IconName, string[]> = {
   home: ["M3 10.5 12 3l9 7.5", "M5 9.5V20h5v-5h4v5h5V9.5"],
@@ -30,7 +36,15 @@ const PATHS: Record<IconName, string[]> = {
     "M12 4a1.6 1.6 0 1 0 0-3.2A1.6 1.6 0 0 0 12 4Z",
     "M12 5v7m0 0-3 8m3-8 3 8M7 9h10",
   ],
+  info: ["M12 11v5", "M12 8h.01"],
+  edit: ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"],
+  trash: ["M4 7h16", "M9 7V5h6v2", "M6 7l1 13h10l1-13"],
+  play: ["M8 5v14l11-7z"],
+  flame: ["M12 3c2 3 4 4.5 4 8a4 4 0 0 1-8 0c0-1.5.5-2.5 1.5-3.5C9 9 12 7 12 3Z"],
+  target: ["M12 8v4l2 2"],
 };
+
+const CIRCLED: Partial<Record<IconName, number>> = { clock: 9, info: 9, target: 9 };
 
 export function Icon({
   name,
@@ -51,11 +65,11 @@ export function Icon({
       fill="none"
       aria-hidden
     >
-      {name === "clock" && (
+      {CIRCLED[name] && (
         <circle
           cx={12}
           cy={12}
-          r={9}
+          r={CIRCLED[name]}
           fill="none"
           stroke={color}
           strokeWidth={strokeWidth}

@@ -21,9 +21,14 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [workouts, exercises] = await Promise.all([
+  const [workouts, exercises, profRes] = await Promise.all([
     getWorkouts(supabase),
     getExercises(supabase),
+    supabase
+      .from("profiles")
+      .select("weekly_workout_goal, weekly_volume_goal_lb")
+      .eq("id", user!.id)
+      .maybeSingle(),
   ]);
 
   const exMap = new Map(
@@ -128,8 +133,19 @@ export default async function DashboardPage() {
       }
     : null;
 
+  const goals =
+    profRes.data?.weekly_workout_goal || profRes.data?.weekly_volume_goal_lb
+      ? {
+          workoutGoal: profRes.data.weekly_workout_goal ?? null,
+          workoutDone: thisW.length,
+          volumeGoalLb: profRes.data.weekly_volume_goal_lb ?? null,
+          volumeDoneLb: volThis,
+        }
+      : null;
+
   const data: DashboardData = {
     hasData: workouts.length > 0,
+    goals,
     firstName:
       (user?.user_metadata?.display_name as string)?.split(" ")[0] ||
       (user?.email?.split("@")[0] ?? "athlete"),

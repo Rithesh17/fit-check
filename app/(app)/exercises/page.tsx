@@ -26,6 +26,7 @@ export default async function ExercisesPage() {
     category: e.category,
     equipment: e.equipment,
     bestLb: best[e.id] || 0,
+    custom: e.user_id != null,
   }));
 
   return (

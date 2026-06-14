@@ -1,13 +1,28 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useUnits } from "@/lib/units";
+import { createClient } from "@/lib/supabase/client";
 import { Card, Kicker } from "@/components/ui";
+import { Icon } from "@/components/Icon";
 import { TYPE_META, type Workout } from "@/lib/types";
 import { fmtDuration, relDate } from "@/lib/format";
 
 export function DetailView({ workout: w }: { workout: Workout }) {
   const { fmt } = useUnits();
+  const router = useRouter();
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function del() {
+    setDeleting(true);
+    const supabase = createClient();
+    await supabase.from("workouts").delete().eq("id", w.id);
+    router.push("/history");
+    router.refresh();
+  }
   const tm = TYPE_META[w.type];
   const { label: dateLabel } = relDate(w.performed_at);
 
@@ -62,12 +77,40 @@ export function DetailView({ workout: w }: { workout: Workout }) {
 
   return (
     <div className="flex flex-col gap-[14px] animate-popIn">
-      <Link
-        href="/history"
-        className="flex items-center gap-[7px] text-[13px] font-semibold text-muted2"
-      >
-        ← Back to history
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link
+          href="/history"
+          className="flex items-center gap-[7px] text-[13px] font-semibold text-muted2"
+        >
+          ← Back to history
+        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/log/edit/${w.id}`}
+            className="flex items-center gap-[6px] rounded-[10px] border border-line bg-paper px-3 py-2 text-[12.5px] font-semibold text-muted2"
+          >
+            <Icon name="edit" size={15} color="currentColor" />
+            Edit
+          </Link>
+          {confirmDel ? (
+            <button
+              onClick={del}
+              disabled={deleting}
+              className="rounded-[10px] bg-pulse px-3 py-2 text-[12.5px] font-bold text-white"
+            >
+              {deleting ? "…" : "Confirm delete"}
+            </button>
+          ) : (
+            <button
+              onClick={() => setConfirmDel(true)}
+              className="flex items-center justify-center rounded-[10px] border border-line bg-paper px-3 py-2 text-muted2"
+              aria-label="Delete workout"
+            >
+              <Icon name="trash" size={15} color="currentColor" />
+            </button>
+          )}
+        </div>
+      </div>
 
       <div
         className="rounded-card p-[22px] text-white"

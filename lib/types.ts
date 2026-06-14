@@ -7,6 +7,8 @@ export interface Profile {
   units: Units;
   streak_days: number;
   weight_goal_lb: number | null;
+  weekly_workout_goal: number | null;
+  weekly_volume_goal_lb: number | null;
 }
 
 export interface Exercise {
@@ -17,6 +19,48 @@ export interface Exercise {
   equipment: string;
   primary_muscle: string | null;
   intensity: number;
+  is_cardio: boolean;
+  video_url: string | null;
+  cues: string | null;
+  default_sets: number | null;
+  default_reps: number | null;
+  default_weight_lb: number | null;
+  default_duration_sec: number | null;
+}
+
+export interface UserExercisePrefs {
+  id: string;
+  user_id: string;
+  exercise_id: string;
+  video_url: string | null;
+  cues: string | null;
+  default_sets: number | null;
+  default_reps: number | null;
+  default_weight_lb: number | null;
+  default_duration_sec: number | null;
+}
+
+export interface WorkoutTemplate {
+  id: string;
+  user_id: string;
+  name: string;
+  type: WorkoutType;
+  notes: string | null;
+  position: number;
+  template_exercises?: TemplateExercise[];
+}
+
+export interface TemplateExercise {
+  id: string;
+  template_id: string;
+  exercise_id: string | null;
+  name: string;
+  target: string | null;
+  position: number;
+  default_sets: number | null;
+  default_reps: number | null;
+  default_weight_lb: number | null;
+  default_duration_sec: number | null;
 }
 
 export interface WorkoutSet {

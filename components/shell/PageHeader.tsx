@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useUnits } from "@/lib/units";
 import { Avatar } from "./AppFrame";
 
@@ -34,7 +35,9 @@ export function PageHeader({
           >
             {units === "imperial" ? "LB · MI" : "KG · KM"}
           </button>
-          <Avatar size={40} />
+          <Link href="/account" aria-label="Account">
+            <Avatar size={40} />
+          </Link>
         </div>
       </div>
     </header>

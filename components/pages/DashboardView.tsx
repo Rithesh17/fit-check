@@ -9,6 +9,12 @@ import { WorkoutRow, type WorkoutRowData } from "@/components/WorkoutRow";
 
 export interface DashboardData {
   hasData: boolean;
+  goals: {
+    workoutGoal: number | null;
+    workoutDone: number;
+    volumeGoalLb: number | null;
+    volumeDoneLb: number;
+  } | null;
   firstName: string;
   loads: Record<WindowKey, Record<string, number>>;
   stats: {
@@ -45,6 +51,8 @@ export function DashboardView({ data }: { data: DashboardData }) {
         </div>
       </div>
 
+      {data.goals && <GoalsCard goals={data.goals} />}
+
       <div className="grid gap-[18px] lg:grid-cols-[1.1fr_.9fr]">
         <WeekCard week={data.week} />
         <RecentCard recent={data.recent} />
@@ -66,6 +74,57 @@ export function DashboardView({ data }: { data: DashboardData }) {
         <span className="text-[18px] text-faint">→</span>
       </Link>
     </div>
+  );
+}
+
+function GoalsCard({ goals }: { goals: NonNullable<DashboardData["goals"]> }) {
+  const { fmt } = useUnits();
+  const bars: { label: string; done: string; goal: string; pct: number; color: string }[] = [];
+  if (goals.workoutGoal) {
+    bars.push({
+      label: "Workouts",
+      done: String(goals.workoutDone),
+      goal: String(goals.workoutGoal),
+      pct: Math.min(100, Math.round((goals.workoutDone / goals.workoutGoal) * 100)),
+      color: "#FF5A3C",
+    });
+  }
+  if (goals.volumeGoalLb) {
+    bars.push({
+      label: "Volume",
+      done: fmt.vol(goals.volumeDoneLb),
+      goal: fmt.vol(goals.volumeGoalLb) + " " + fmt.wtU(),
+      pct: Math.min(100, Math.round((goals.volumeDoneLb / goals.volumeGoalLb) * 100)),
+      color: "#7A4DFF",
+    });
+  }
+  return (
+    <Card className="p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <Kicker>This Week</Kicker>
+          <div className="display mt-[7px] text-[19px] font-bold">Weekly Goals</div>
+        </div>
+      </div>
+      <div className="flex flex-col gap-4">
+        {bars.map((b) => (
+          <div key={b.label}>
+            <div className="mb-[7px] flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-ink2">{b.label}</span>
+              <span className="mono text-[12px] text-muted">
+                {b.done} / {b.goal}
+              </span>
+            </div>
+            <div className="h-[10px] overflow-hidden rounded-full bg-sand">
+              <div
+                className="h-full rounded-full"
+                style={{ width: b.pct + "%", background: b.color }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 

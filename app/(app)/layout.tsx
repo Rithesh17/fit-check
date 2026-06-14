@@ -17,7 +17,9 @@ export default async function AppLayout({
   // ensure a profile exists, then seed demo data on first visit (no-op afterwards)
   let { data: profile } = await supabase
     .from("profiles")
-    .select("id, display_name, units, streak_days, weight_goal_lb")
+    .select(
+      "id, display_name, units, streak_days, weight_goal_lb, weekly_workout_goal, weekly_volume_goal_lb",
+    )
     .eq("id", user.id)
     .maybeSingle();
 
@@ -30,7 +32,9 @@ export default async function AppLayout({
       .upsert({ id: user.id, display_name: fallbackName });
     const { data } = await supabase
       .from("profiles")
-      .select("id, display_name, units, streak_days, weight_goal_lb")
+      .select(
+      "id, display_name, units, streak_days, weight_goal_lb, weekly_workout_goal, weekly_volume_goal_lb",
+    )
       .eq("id", user.id)
       .maybeSingle();
     profile = data;
@@ -45,6 +49,8 @@ export default async function AppLayout({
     units: (profile?.units as Profile["units"]) ?? "imperial",
     streak_days: profile?.streak_days ?? 0,
     weight_goal_lb: profile?.weight_goal_lb ?? null,
+    weekly_workout_goal: profile?.weekly_workout_goal ?? null,
+    weekly_volume_goal_lb: profile?.weekly_volume_goal_lb ?? null,
   };
 
   return <AppFrame profile={safeProfile}>{children}</AppFrame>;

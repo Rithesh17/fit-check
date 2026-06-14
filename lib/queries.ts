@@ -4,6 +4,7 @@ import type {
   Exercise,
   BodyMetric,
   BodyMeasurement,
+  WorkoutTemplate,
 } from "./types";
 
 type DB = SupabaseClient;
@@ -79,6 +80,72 @@ export async function getMeasurements(
     .select("*")
     .order("measured_on", { ascending: false });
   return (data as BodyMeasurement[]) || [];
+}
+
+export async function getTemplates(supabase: DB): Promise<WorkoutTemplate[]> {
+  const { data } = await supabase
+    .from("workout_templates")
+    .select("*, template_exercises(*)")
+    .order("position", { ascending: true });
+  return ((data as WorkoutTemplate[]) || []).map((t) => ({
+    ...t,
+    template_exercises: (t.template_exercises || []).slice().sort(
+      (a, b) => a.position - b.position,
+    ),
+  }));
+}
+
+export async function getTemplate(
+  supabase: DB,
+  id: string,
+): Promise<WorkoutTemplate | null> {
+  const { data } = await supabase
+    .from("workout_templates")
+    .select("*, template_exercises(*)")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+  const t = data as WorkoutTemplate;
+  t.template_exercises = (t.template_exercises || []).slice().sort(
+    (a, b) => a.position - b.position,
+  );
+  return t;
+}
+
+// Per-exercise session history for the info sheet: each past workout that
+// included this exercise, newest first, with that session's sets.
+export interface ExerciseSession {
+  date: string;
+  topWeight: number;
+  sets: { w: number; r: number }[];
+}
+
+export async function getExerciseHistory(
+  supabase: DB,
+  exerciseId: string,
+): Promise<ExerciseSession[]> {
+  const { data } = await supabase
+    .from("workout_exercises")
+    .select("id, sets(weight_lb, reps, position), workouts!inner(performed_at)")
+    .eq("exercise_id", exerciseId);
+  if (!data) return [];
+  const rows = (data as unknown as {
+    sets: { weight_lb: number; reps: number; position: number }[];
+    workouts: { performed_at: string };
+  }[]).map((r) => {
+    const sets = (r.sets || [])
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((s) => ({ w: s.weight_lb, r: s.reps }));
+    return {
+      date: r.workouts.performed_at,
+      topWeight: Math.max(0, ...sets.map((s) => s.w)),
+      sets,
+    };
+  });
+  return rows.sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
 }
 
 // ---- derived helpers ----
