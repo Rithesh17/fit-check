@@ -42,7 +42,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           setLoading(false);
           return;
         }
-        await supabase.rpc("seed_demo_for_me");
+        // demo data is seeded server-side on first dashboard load; don't block here
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,

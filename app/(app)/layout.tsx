@@ -36,8 +36,8 @@ export default async function AppLayout({
     profile = data;
   }
 
-  // seed sample data the first time (function is a no-op if workouts exist)
-  await supabase.rpc("seed_demo_for_me");
+  // (demo data is seeded by the dashboard page, which can guarantee it runs
+  //  before its own queries — the layout renders concurrently with the page.)
 
   const safeProfile: Profile = {
     id: user.id,

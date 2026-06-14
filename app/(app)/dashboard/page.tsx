@@ -21,6 +21,10 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // seed demo data on first load BEFORE querying (layout runs concurrently with
+  // the page, so we can't rely on it having finished). No-op after first run.
+  await supabase.rpc("seed_demo_for_me");
+
   const [workouts, exercises] = await Promise.all([
     getWorkouts(supabase),
     getExercises(supabase),
