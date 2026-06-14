@@ -86,7 +86,11 @@ export function DetailView({ workout: w }: { workout: Workout }) {
           </span>
         </div>
         <div className="display text-[27px] font-bold">{w.title}</div>
-        <div className="mt-[5px] text-[13px]" style={{ color: "rgba(255,255,255,.55)" }}>
+        <div
+          suppressHydrationWarning
+          className="mt-[5px] text-[13px]"
+          style={{ color: "rgba(255,255,255,.55)" }}
+        >
           {dateLabel}
         </div>
         <div

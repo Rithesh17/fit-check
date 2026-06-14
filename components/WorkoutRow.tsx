@@ -71,7 +71,12 @@ export function WorkoutRow({
         <div className="mt-[3px] truncate text-[12.5px] text-muted">{metric}</div>
       </div>
       <div className="shrink-0 text-right">
-        <div className="text-[12px] font-semibold text-muted2">{day}</div>
+        <div
+          suppressHydrationWarning
+          className="text-[12px] font-semibold text-muted2"
+        >
+          {day}
+        </div>
         <div className="mono mt-[3px] text-[11px] text-faint">{dur}</div>
       </div>
     </>

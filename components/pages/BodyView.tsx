@@ -188,7 +188,10 @@ export function BodyView({ data }: { data: BodyData }) {
         <Card className="p-5">
           <div className="mb-4">
             <Kicker>Measurements</Kicker>
-            <div className="display mt-[7px] text-[19px] font-bold">
+            <div
+              suppressHydrationWarning
+              className="display mt-[7px] text-[19px] font-bold"
+            >
               {data.updatedOn
                 ? `Updated ${new Date(data.updatedOn).toLocaleDateString("en-US", {
                     month: "short",

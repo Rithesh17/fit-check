@@ -46,7 +46,10 @@ export function ProgressView({ data }: { data: ProgressData }) {
                 {fmt.wtU()}
               </span>
             </div>
-            <div className="mt-[3px] text-[11.5px] text-muted">
+            <div
+              suppressHydrationWarning
+              className="mt-[3px] text-[11.5px] text-muted"
+            >
               set {relDate(p.at).day.toLowerCase()}
             </div>
           </Card>

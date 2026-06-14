@@ -42,3 +42,6 @@ fitness-ui.zip
 /test-results
 /.verify
 /design-ref/render
+
+# Local Netlify folder
+.netlify

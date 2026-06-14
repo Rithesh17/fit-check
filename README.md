@@ -68,9 +68,13 @@ Open the Supabase dashboard → SQL Editor → paste the contents of
 
 What it creates: `profiles`, `exercises` (a seeded global library), `workouts`,
 `workout_exercises`, `sets`, `body_metrics`, `body_measurements`, full
-row-level-security policies, a trigger that creates a profile for each new user,
-and `seed_demo_for_me()` which fills a brand-new account with a realistic
-starter dataset on first sign-in.
+row-level-security policies, and a trigger that creates a profile for each new
+user. New accounts start **empty** (only the global exercise library is shared).
+
+> A `seed_demo_for_me()` function is included if you ever want to populate the
+> signed-in account with a realistic sample week — call it from the SQL editor
+> (`select seed_demo_for_me();` while authenticated) or via `supabase.rpc`. It is
+> **not** called automatically.
 
 ### Supabase ↔ GitHub integration (branching)
 
