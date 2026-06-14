@@ -1,0 +1,13 @@
+# Netlify configuration for the Pulse (Next.js) app.
+# The official Next.js Runtime handles SSR, middleware, route handlers and ISR.
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Auto-installed by Netlify when Next.js is detected; pinned here for clarity.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

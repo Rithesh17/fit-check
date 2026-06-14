@@ -81,18 +81,35 @@ directory** as the repo root (`.`) — see the
 Migrations under `supabase/migrations/` are then applied automatically when
 changes are merged.
 
-## Deploy to Vercel
+## Deploy to Netlify
+
+The repo includes [`netlify.toml`](netlify.toml) and works with Netlify's
+official Next.js Runtime out of the box.
+
+1. **Netlify → Add new site → Import an existing project** → pick the GitHub
+   repo `Rithesh17/fit-check`.
+2. Build settings are auto-detected (`npm run build`, publish `.next`). Leave
+   them as-is.
+3. **Site configuration → Environment variables** — add:
+   - `NEXT_PUBLIC_SUPABASE_URL` = `https://rejcmfkdqlkhdtosxpmm.supabase.co`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = your `sb_publishable_…` key
+4. **Deploy site.**
+5. After the first deploy, copy the Netlify URL into **Supabase → Authentication
+   → URL Configuration** (Site URL + Redirect URLs).
+
+CLI alternative:
 
 ```bash
-npx vercel link        # link to your Vercel project (interactive login)
-# add env vars to the Vercel project (Production + Preview):
-npx vercel env add NEXT_PUBLIC_SUPABASE_URL
-npx vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
-npx vercel --prod      # deploy
+npm i -g netlify-cli
+netlify login
+netlify init        # link the repo to a new/existing site
+netlify env:set NEXT_PUBLIC_SUPABASE_URL https://rejcmfkdqlkhdtosxpmm.supabase.co
+netlify env:set NEXT_PUBLIC_SUPABASE_ANON_KEY sb_publishable_xxx
+netlify deploy --build --prod
 ```
 
-After the first deploy, add your Vercel URL to **Supabase → Authentication →
-URL Configuration** (Site URL + Redirect URLs).
+> Prefer Vercel? It also works zero-config — import the repo, add the same two
+> env vars, and deploy.
 
 > For instant sign-up during testing, disable email confirmation under
 > **Supabase → Authentication → Providers → Email**. With it on, new users must
