@@ -1,0 +1,22 @@
+import { chromium } from "playwright";
+import path from "node:path";
+
+const base = process.env.BASE || "http://localhost:3000";
+const email = process.env.EMAIL;
+const password = process.env.PASSWORD || "pulsetest1234";
+const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: 1000, height: 900 }, deviceScaleFactor: 1 });
+const page = await ctx.newPage();
+await page.goto(base + "/login", { waitUntil: "networkidle" });
+await page.fill('input[type="email"]', email);
+await page.fill('input[type="password"]', password);
+await page.click('button[type="submit"]');
+await page.waitForURL("**/dashboard", { timeout: 20000 });
+await page.goto(base + "/exercises", { waitUntil: "networkidle" });
+await page.fill('input[placeholder*="Search"]', "Bench Press");
+await page.waitForTimeout(800);
+await page.locator('[aria-label="Exercise info"]').first().click();
+await page.waitForTimeout(3000);
+await page.screenshot({ path: path.resolve(".verify/p2-info-bench.png") });
+console.log("done");
+await browser.close();

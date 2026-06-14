@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useUnits } from "@/lib/units";
 import { Card, Kicker, BigNum, Chip, GoodDelta } from "@/components/ui";
 import { LineChart } from "@/components/LineChart";
+import { PlateCalc, OneRepMax } from "@/components/tools/Calculators";
 import { lerp } from "@/lib/muscles";
 import { relDate } from "@/lib/format";
 
@@ -20,6 +21,7 @@ export interface ProgressData {
 export function ProgressView({ data }: { data: ProgressData }) {
   const { fmt } = useUnits();
   const [lift, setLift] = useState(data.liftNames[0] || "");
+  const [tool, setTool] = useState<"plate" | "1rm" | null>(null);
 
   const liftSeries = (data.e1rm[lift] || []).map((v) => fmt.wt(v));
   const maxSets = Math.max(1, ...data.muscle.map((m) => m[1]));
@@ -128,6 +130,30 @@ export function ProgressView({ data }: { data: ProgressData }) {
           </div>
         ))}
       </Card>
+
+      {/* calculators */}
+      <Card className="p-5">
+        <Kicker className="mb-3">Calculators</Kicker>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setTool("plate")}
+            className="rounded-[12px] border border-line bg-paper py-[14px] text-[14px] font-bold text-ink"
+          >
+            🏋️ Plate calculator
+          </button>
+          <button
+            onClick={() => setTool("1rm")}
+            className="rounded-[12px] border border-line bg-paper py-[14px] text-[14px] font-bold text-ink"
+          >
+            📈 1RM calculator
+          </button>
+        </div>
+      </Card>
+
+      {tool === "plate" && (
+        <PlateCalc weightLb={135} onClose={() => setTool(null)} />
+      )}
+      {tool === "1rm" && <OneRepMax onClose={() => setTool(null)} />}
     </div>
   );
 }
