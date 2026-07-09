@@ -108,37 +108,39 @@ export function SharedWorkoutView({ workout: w }: { workout: Workout }) {
         )}
 
         {w.type === "gym" && exs.length > 0 && (
-          <div className="mt-[14px] flex flex-col gap-3">
-            {exs.map((e) => {
-              return (
-                <div
-                  key={e.id}
-                  className="rounded-card border border-line2 bg-card p-4 shadow-card"
-                >
-                  <div className="mb-2 flex items-center justify-between">
-                    <span className="truncate pr-2 text-[15px] font-bold">
-                      {e.name}
-                    </span>
-                    <span className="mono text-[11px] text-faint">
-                      {e.sets.length} sets
-                    </span>
-                  </div>
-                  {e.sets.map((s, j) => (
-                    <div
+          <div className="mt-3 flex flex-col gap-[10px]">
+            {exs.map((e) => (
+              <div
+                key={e.id}
+                className="rounded-card border border-line2 bg-card p-[15px] shadow-card"
+              >
+                <div className="mb-[10px] flex items-center justify-between gap-2">
+                  <span className="truncate text-[15px] font-bold">
+                    {e.name}
+                  </span>
+                  <span className="mono shrink-0 text-[11px] text-faint">
+                    {e.sets.length} sets
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-[7px]">
+                  {e.sets.map((s) => (
+                    <span
                       key={s.id}
-                      className="flex items-center justify-between py-[7px]"
+                      className="display flex items-baseline gap-[3px] rounded-[10px] bg-sand px-[11px] py-[6px] text-[13px] font-bold text-ink"
                     >
-                      <div className="display text-[12px] font-bold text-faint">
-                        {j + 1}
-                      </div>
-                      <div className="display text-[13px] font-bold">
-                        {fmt.wt(s.weight_lb)} {fmt.wtU()} × {s.reps}
-                      </div>
-                    </div>
+                      {fmt.wt(s.weight_lb)}
+                      <span className="text-[10.5px] font-semibold text-muted2">
+                        {fmt.wtU()}
+                      </span>
+                      <span className="px-[1px] text-[11px] font-normal text-faint">
+                        ×
+                      </span>
+                      {s.reps}
+                    </span>
                   ))}
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
 
