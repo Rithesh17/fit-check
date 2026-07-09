@@ -6,7 +6,9 @@ import { useUnits } from "@/lib/units";
 import { createClient } from "@/lib/supabase/client";
 import { Card, Kicker, BigNum, Chip } from "@/components/ui";
 import { InfoButton } from "@/components/exercise/ExerciseInfo";
+import { ExerciseForm } from "@/components/exercise/ExerciseForm";
 import { PlateCalc } from "@/components/tools/Calculators";
+import { Icon } from "@/components/Icon";
 import { fmtClock } from "@/lib/format";
 import type { WorkoutType } from "@/lib/types";
 
@@ -138,6 +140,15 @@ export function LogWorkout({
         const last = e.sets[e.sets.length - 1] || { w: 45, r: 10 };
         return { ...e, sets: [...e.sets, { w: last.w, r: last.r, done: false }] };
       }),
+    );
+  }
+  function removeSet(ek: string, i: number) {
+    update((xs) =>
+      xs.map((e) =>
+        e.key === ek
+          ? { ...e, sets: e.sets.filter((_, j) => j !== i) }
+          : e,
+      ),
     );
   }
   function stepW(ek: string, i: number, d: number) {
@@ -451,9 +462,9 @@ export function LogWorkout({
 
                 <div
                   className="grid items-center gap-2 border-b border-[#F4F0E8] px-[2px] pb-2"
-                  style={{ gridTemplateColumns: "26px 1fr 96px 96px 38px" }}
+                  style={{ gridTemplateColumns: "24px 1fr 84px 84px 34px 30px" }}
                 >
-                  {["SET", "PREV", fmt.wtU().toUpperCase(), "REPS", ""].map((h, i) => (
+                  {["SET", "PREV", fmt.wtU().toUpperCase(), "REPS", "", ""].map((h, i) => (
                     <div
                       key={i}
                       className="mono text-[9.5px] text-faint"
@@ -472,7 +483,7 @@ export function LogWorkout({
                     key={i}
                     className="grid items-center gap-2 rounded-[8px] px-[2px] py-[7px]"
                     style={{
-                      gridTemplateColumns: "26px 1fr 96px 96px 38px",
+                      gridTemplateColumns: "24px 1fr 84px 84px 34px 30px",
                       background: s.done ? "#FBFDF6" : "transparent",
                     }}
                   >
@@ -505,6 +516,13 @@ export function LogWorkout({
                       }}
                     >
                       ✓
+                    </button>
+                    <button
+                      onClick={() => removeSet(e.key, i)}
+                      className="flex h-[28px] w-[26px] items-center justify-center rounded-[8px] text-[16px] leading-none text-faint hover:bg-sand hover:text-pulse"
+                      aria-label={`Delete set ${i + 1}`}
+                    >
+                      ×
                     </button>
                   </div>
                 ))}
@@ -635,8 +653,10 @@ export function ExercisePicker({
   onPick: (e: LibItem) => void;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("All");
+  const [creating, setCreating] = useState(false);
   const cats = ["All", ...Array.from(new Set(lib.map((e) => e.category)))];
   const list = lib.filter(
     (e) =>
@@ -644,6 +664,7 @@ export function ExercisePicker({
       (!q || e.name.toLowerCase().includes(q.toLowerCase())),
   );
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center"
       onClick={onClose}
@@ -652,8 +673,18 @@ export function ExercisePicker({
         className="flex max-h-[80dvh] w-full max-w-[480px] flex-col rounded-t-[24px] bg-sand p-4 sm:rounded-[24px]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <div className="display text-[18px] font-bold">Add exercise</div>
+        <div className="mb-3 flex shrink-0 items-center justify-between">
+          <div className="flex items-center gap-[10px]">
+            <div className="display text-[18px] font-bold">Add exercise</div>
+            <button
+              type="button"
+              onClick={() => setCreating(true)}
+              aria-label="Create a new exercise"
+              className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-ink text-white"
+            >
+              <Icon name="plus" size={15} color="#fff" />
+            </button>
+          </div>
           <button onClick={onClose} className="text-[20px] text-muted">
             ×
           </button>
@@ -663,16 +694,16 @@ export function ExercisePicker({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search exercises…"
-          className="mb-3 w-full rounded-[12px] border border-line bg-card px-4 py-3 text-[15px] outline-none focus:border-pulse"
+          className="mb-3 w-full shrink-0 rounded-[12px] border border-line bg-card px-4 py-3 text-[15px] outline-none focus:border-pulse"
         />
-        <div className="scrollx mb-3 flex gap-2 overflow-x-auto">
+        <div className="scrollx mb-3 flex shrink-0 gap-2 overflow-x-auto">
           {cats.map((c) => (
             <Chip key={c} active={cat === c} onClick={() => setCat(c)}>
               {c}
             </Chip>
           ))}
         </div>
-        <div className="scrolly flex flex-col gap-2 overflow-y-auto">
+        <div className="scrolly flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           {list.map((e) => (
             <button
               key={e.id}
@@ -691,6 +722,17 @@ export function ExercisePicker({
         </div>
       </div>
     </div>
+    {creating && (
+      <ExerciseForm
+        mode="create"
+        onClose={() => setCreating(false)}
+        onSaved={() => {
+          setCreating(false);
+          router.refresh();
+        }}
+      />
+    )}
+    </>
   );
 }
 
