@@ -274,7 +274,6 @@ function GymBody({ w }: { w: Workout }) {
     <div className="flex flex-col gap-3">
       <Kicker className="mt-1">Exercises · {exs.length}</Kicker>
       {exs.map((e) => {
-        const top = Math.max(1, ...e.sets.map((s) => s.weight_lb));
         return (
           <Card key={e.id} className="p-4">
             <div className="mb-2 flex items-center justify-between">
@@ -284,21 +283,14 @@ function GymBody({ w }: { w: Workout }) {
               </span>
             </div>
             {e.sets.map((s, j) => (
-              <div key={s.id} className="flex items-center gap-[10px] py-[6px]">
-                <div className="display w-6 text-[12px] font-bold text-faint">
+              <div
+                key={s.id}
+                className="flex items-center justify-between py-[7px]"
+              >
+                <div className="display text-[12px] font-bold text-faint">
                   {j + 1}
                 </div>
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-sand">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${(s.weight_lb / top) * 100}%`,
-                      background: "#FF5A3C",
-                      opacity: 0.35 + 0.65 * (s.weight_lb / top),
-                    }}
-                  />
-                </div>
-                <div className="display w-[92px] text-right text-[13px] font-bold">
+                <div className="display text-[13px] font-bold">
                   {fmt.wt(s.weight_lb)} {fmt.wtU()} × {s.reps}
                 </div>
               </div>
