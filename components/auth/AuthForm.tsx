@@ -107,6 +107,17 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             minLength={6}
           />
 
+          {!isSignup && (
+            <div className="mt-3 text-right">
+              <Link
+                href="/forgot"
+                className="text-[13px] font-semibold text-pulse"
+              >
+                Forgot password?
+              </Link>
+            </div>
+          )}
+
           {error && (
             <div className="mt-4 rounded-[10px] bg-pulseSoft px-3 py-2 text-[13px] font-medium text-pulse">
               {error}
