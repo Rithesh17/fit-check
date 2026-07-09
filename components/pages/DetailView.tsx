@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useUnits } from "@/lib/units";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +16,9 @@ export function DetailView({ workout: w }: { workout: Workout }) {
   const router = useRouter();
   const [confirmDel, setConfirmDel] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   async function del() {
     setDeleting(true);
@@ -22,6 +26,38 @@ export function DetailView({ workout: w }: { workout: Workout }) {
     await supabase.from("workouts").delete().eq("id", w.id);
     router.push("/history");
     router.refresh();
+  }
+
+  async function copy(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }
+
+  async function share() {
+    setSharing(true);
+    const supabase = createClient();
+    let sid = w.share_id ?? null;
+    if (!sid) {
+      sid =
+        globalThis.crypto?.randomUUID?.() ??
+        `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const { error } = await supabase
+        .from("workouts")
+        .update({ share_id: sid })
+        .eq("id", w.id);
+      if (error) {
+        setSharing(false);
+        return;
+      }
+      w.share_id = sid;
+    }
+    const url = `${window.location.origin}/share/${sid}`;
+    setShareUrl(url);
+    copy(url);
+    setSharing(false);
   }
   const tm = TYPE_META[w.type];
   const { label: dateLabel } = relDate(w.performed_at);
@@ -85,6 +121,30 @@ export function DetailView({ workout: w }: { workout: Workout }) {
           ← Back to history
         </Link>
         <div className="flex items-center gap-2">
+          <button
+            onClick={share}
+            disabled={sharing}
+            className="flex items-center gap-[6px] rounded-[10px] border border-line bg-paper px-3 py-2 text-[12.5px] font-semibold text-muted2"
+            aria-label="Share workout"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+            {sharing ? "…" : "Share"}
+          </button>
           <Link
             href={`/log/edit/${w.id}`}
             className="flex items-center gap-[6px] rounded-[10px] border border-line bg-paper px-3 py-2 text-[12.5px] font-semibold text-muted2"
@@ -153,6 +213,56 @@ export function DetailView({ workout: w }: { workout: Workout }) {
       {w.type === "gym" && <GymBody w={w} />}
       {w.type === "run" && <RunBody w={w} />}
       {w.type === "racquet" && <RacquetBody w={w} />}
+
+      {shareUrl && createPortal(
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center"
+          onClick={() => setShareUrl(null)}
+        >
+          <div
+            className="w-full max-w-[440px] rounded-t-[24px] bg-sand p-5 shadow-card sm:rounded-[24px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <div className="display text-[18px] font-bold">
+                Share this workout
+              </div>
+              <button
+                onClick={() => setShareUrl(null)}
+                className="text-[22px] leading-none text-muted"
+              >
+                ×
+              </button>
+            </div>
+            <p className="mb-3 text-[13px] text-muted2">
+              Anyone with this link can view a clean, read-only copy — no account
+              needed.
+            </p>
+            <div className="rounded-[12px] border border-line bg-card px-3 py-3">
+              <div className="scrollx overflow-x-auto whitespace-nowrap text-[13px] text-ink">
+                {shareUrl}
+              </div>
+            </div>
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => copy(shareUrl)}
+                className="flex-1 rounded-[12px] bg-ink py-[13px] text-[14px] font-bold text-white"
+              >
+                {copied ? "Copied!" : "Copy link"}
+              </button>
+              <a
+                href={shareUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 rounded-[12px] border border-line bg-paper py-[13px] text-center text-[14px] font-bold text-ink"
+              >
+                Open
+              </a>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

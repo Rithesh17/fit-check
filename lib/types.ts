@@ -95,6 +95,7 @@ export interface Workout {
   pace_spm: number | null;
   rallies: number | null;
   score: number[][] | null;
+  share_id?: string | null;
   workout_exercises?: WorkoutExercise[];
 }
 
