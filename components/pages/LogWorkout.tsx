@@ -113,8 +113,6 @@ export function LogWorkout({
     return () => clearTimeout(t);
   }, [rest]);
 
-  const stepLb = imperial ? 5 : 2.5 / 0.453592;
-
   function addExercise(item: LibItem) {
     const sets = Math.max(1, item.default_sets ?? 1);
     const w = item.default_weight_lb ?? 45;
@@ -151,37 +149,34 @@ export function LogWorkout({
       ),
     );
   }
-  function stepW(ek: string, i: number, d: number) {
+  // Inputs carry the displayed unit; storage stays canonical lb. They show the
+  // exact value (up to a decimal) rather than fmt.wt's whole-unit rounding, so
+  // what you type back is what you get.
+  const wtField = (lb: number) =>
+    Math.round((imperial ? lb : lb * 0.453592) * 10) / 10;
+  function setW(ek: string, i: number, wDisplay: number) {
+    const lb = imperial ? wDisplay : wDisplay / 0.453592;
     update((xs) =>
       xs.map((e) =>
         e.key === ek
           ? {
               ...e,
               sets: e.sets.map((s, j) =>
-                j === i ? { ...s, w: Math.max(0, Math.round((s.w + d) * 10) / 10) } : s,
+                j === i ? { ...s, w: Math.max(0, Math.round(lb * 10) / 10) } : s,
               ),
             }
           : e,
       ),
     );
   }
-  function setW(ek: string, i: number, wLb: number) {
-    update((xs) =>
-      xs.map((e) =>
-        e.key === ek
-          ? { ...e, sets: e.sets.map((s, j) => (j === i ? { ...s, w: wLb } : s)) }
-          : e,
-      ),
-    );
-  }
-  function stepR(ek: string, i: number, d: number) {
+  function setR(ek: string, i: number, r: number) {
     update((xs) =>
       xs.map((e) =>
         e.key === ek
           ? {
               ...e,
               sets: e.sets.map((s, j) =>
-                j === i ? { ...s, r: Math.max(0, s.r + d) } : s,
+                j === i ? { ...s, r: Math.max(0, Math.round(r)) } : s,
               ),
             }
           : e,
@@ -497,15 +492,16 @@ export function LogWorkout({
                     >
                       plates
                     </button>
-                    <Stepper
-                      value={fmt.wt(s.w)}
-                      onMinus={() => stepW(e.key, i, -stepLb)}
-                      onPlus={() => stepW(e.key, i, stepLb)}
+                    <NumInput
+                      value={wtField(s.w)}
+                      onCommit={(v) => setW(e.key, i, v)}
+                      label={`Set ${i + 1} weight in ${fmt.wtU()}`}
                     />
-                    <Stepper
+                    <NumInput
                       value={s.r}
-                      onMinus={() => stepR(e.key, i, -1)}
-                      onPlus={() => stepR(e.key, i, 1)}
+                      onCommit={(v) => setR(e.key, i, v)}
+                      label={`Set ${i + 1} reps`}
+                      integer
                     />
                     <button
                       onClick={() => toggleDone(e.key, i)}
@@ -593,28 +589,54 @@ export function LogWorkout({
   );
 }
 
-function Stepper({
+// A plain numeric field for a set's weight/reps. Keeps its own draft string
+// while focused so partial input ("", "12.") survives a keystroke, and commits
+// every parsable value straight through so the row stays live.
+function NumInput({
   value,
-  onMinus,
-  onPlus,
+  onCommit,
+  label,
+  integer,
 }: {
-  value: number | string;
-  onMinus: () => void;
-  onPlus: () => void;
+  value: number;
+  onCommit: (v: number) => void;
+  label: string;
+  integer?: boolean;
 }) {
+  const [draft, setDraft] = useState(() => String(value));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setDraft(String(value));
+  }, [value, focused]);
+
+  const allowed = integer ? /^\d*$/ : /^\d*\.?\d*$/;
+
   return (
-    <div
-      className="flex items-center justify-between gap-[2px] rounded-[9px] px-[6px] py-[4px]"
-      style={{ background: "#F7F3EC" }}
-    >
-      <button onClick={onMinus} className="w-4 text-[15px] font-bold leading-none text-[#B3AB9C]">
-        −
-      </button>
-      <span className="display text-[14px] font-semibold text-ink">{value}</span>
-      <button onClick={onPlus} className="w-4 text-[15px] font-bold leading-none text-[#B3AB9C]">
-        +
-      </button>
-    </div>
+    <input
+      value={draft}
+      aria-label={label}
+      inputMode={integer ? "numeric" : "decimal"}
+      onFocus={(ev) => {
+        setFocused(true);
+        ev.currentTarget.select();
+      }}
+      onBlur={() => {
+        setFocused(false);
+        setDraft(String(value));
+      }}
+      onChange={(ev) => {
+        const next = ev.target.value;
+        if (!allowed.test(next)) return;
+        setDraft(next);
+        const n = parseFloat(next);
+        if (!Number.isNaN(n)) onCommit(n);
+      }}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter") ev.currentTarget.blur();
+      }}
+      className="display w-full rounded-[9px] border border-transparent bg-[#F7F3EC] px-[6px] py-[5px] text-center text-[14px] font-semibold text-ink outline-none focus:border-pulse focus:bg-white"
+    />
   );
 }
 

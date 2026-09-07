@@ -5,7 +5,7 @@ import { Logo } from "@/components/Logo";
 const FEATURES = [
   {
     title: "Log in seconds",
-    body: "Strength, cardio or racquet. Weight/rep steppers, a rest timer, and routines that prefill your sets.",
+    body: "Strength, cardio or racquet. Type in weight and reps, a rest timer, and routines that prefill your sets.",
   },
   {
     title: "See your muscles work",

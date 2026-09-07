@@ -13,7 +13,7 @@ Built with **Next.js (App Router) + TypeScript + Tailwind**, backed by
 
 - **Dashboard** — muscle-load body map (computed from your recent training),
   weekly stats vs. last week, training-load bars, recent activity.
-- **Log Workout** — strength logger with weight/rep steppers, set completion,
+- **Log Workout** — strength logger with weight/rep input fields, set completion,
   a rest timer, plus quick cardio and racquet entry. Saves to Supabase.
 - **History** — every session, monthly summary, 2-week activity strip, filters,
   and per-session detail (strength / run splits / match score).
