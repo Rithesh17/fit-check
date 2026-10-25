@@ -27,6 +27,9 @@ export const metadata: Metadata = {
     "Pulse is a clean, editorial fitness tracker. Log strength, cardio and racquet sessions, watch your muscle load, and track body metrics over time.",
   applicationName: "Pulse",
   appleWebApp: { capable: true, title: "Pulse", statusBarStyle: "default" },
+  // Search Console ownership of pulse-strength-log.netlify.app, required for
+  // Google OAuth brand verification.
+  verification: { google: "l1fNv0URPkUL7cByk5gzDOSbCX26pvDIPOUVEPpHsl4" },
 };
 
 export const viewport: Viewport = {
