@@ -13,7 +13,7 @@ export default function TermsPage() {
       <Section title="Agreement to these terms">
         <p>
           These Terms of Service (&ldquo;Terms&rdquo;) govern your access to and use of
-          the Pulse website and the Pulse mobile app (together, the
+          the Pulse Android app and this website (together, the
           &ldquo;Service&rdquo;). By creating an account or using the Service, you agree
           to these Terms and to our{" "}
           <Link href="/privacy" className="font-semibold text-pulse">
@@ -62,8 +62,7 @@ export default function TermsPage() {
           You own the workouts, notes, measurements and other data you enter into
           the Service (&ldquo;Your Content&rdquo;). You grant us a limited,
           non-exclusive, worldwide, royalty-free license to host, store, process and
-          display Your Content solely to operate and provide the Service to you,
-          including displaying workouts you choose to share by link. This license
+          display Your Content solely to operate and provide the Service to you. This license
           ends when you delete Your Content or your account, except for residual
           backup copies kept for a limited time.
         </p>
@@ -110,6 +109,10 @@ export default function TermsPage() {
           <li>
             interfere with or disrupt the Service, probe or breach its security, or
             access accounts or data that are not yours;
+          </li>
+          <li>
+            distribute modified or repackaged copies of the app, or offer the app
+            for download anywhere other than our official download page;
           </li>
           <li>
             use the Service for anything unlawful, harmful, harassing or

@@ -13,7 +13,7 @@ export default function PrivacyPage() {
         <p>
           This Privacy Policy explains how Pulse (&ldquo;Pulse&rdquo;, &ldquo;we&rdquo;,
           &ldquo;us&rdquo;) collects, uses and protects information when you use the
-          Pulse website and the Pulse mobile app (together, the &ldquo;Service&rdquo;).
+          Pulse Android app and this website (together, the &ldquo;Service&rdquo;).
           By using the Service you agree to the practices described here.
         </p>
         <p>
@@ -81,15 +81,6 @@ export default function PrivacyPage() {
         </p>
       </Section>
 
-      <Section title="Shared workouts">
-        <p>
-          If you create a share link for a workout, anyone with that link can view
-          that workout&rsquo;s details without signing in. Only the workouts you
-          explicitly share are visible this way, and you can stop sharing at any
-          time.
-        </p>
-      </Section>
-
       <Section title="Service providers">
         <p>
           We rely on a small number of providers who process data on our behalf,
@@ -101,7 +92,12 @@ export default function PrivacyPage() {
             account and fitness data.
           </li>
           <li>
-            <strong>Netlify</strong> &mdash; hosting for the website.
+            <strong>Netlify</strong> &mdash; hosting for this website.
+          </li>
+          <li>
+            <strong>GitHub</strong> &mdash; hosts the Android app download. GitHub
+            processes standard request data (such as your IP address) when you
+            download it.
           </li>
           <li>
             <strong>Google</strong> &mdash; optional &ldquo;Sign in with Google&rdquo;.
@@ -134,18 +130,19 @@ export default function PrivacyPage() {
 
       <Section title="Cookies and local storage">
         <p>
-          The website uses essential cookies to keep you signed in. The mobile app
-          stores your data in a local database on your device so it works offline,
-          and keeps your sign-in session in the device&rsquo;s secure storage. We do
-          not use advertising or tracking cookies.
+          This website does not set cookies or use trackers. The app stores your
+          data in a local database on your device so it works offline, and keeps
+          your sign-in session in the device&rsquo;s secure storage. We do not use
+          advertising or tracking cookies anywhere.
         </p>
       </Section>
 
       <Section title="Data retention and deletion">
         <p>
           We keep your information for as long as your account is active. You can
-          delete your account and all associated data at any time from the Account
-          page on the website, or by emailing us. Deleted data is removed from our
+          ask us to delete your account and all associated data at any time by
+          emailing <ContactLink /> from the address on your account; we will do so
+          within 30 days. Deleted data is removed from our
           active database promptly; residual copies in provider backups expire on
           their normal schedule. Data stored locally by the mobile app is removed
           when you sign out with a different account or uninstall the app.

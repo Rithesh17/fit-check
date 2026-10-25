@@ -1,6 +1,5 @@
-import Link from "next/link";
-import { Logo } from "@/components/Logo";
 import { SiteFooter } from "@/components/SiteFooter";
+import { SiteHeader } from "@/components/SiteHeader";
 
 export const CONTACT_EMAIL = "rithhem20@gmail.com";
 export const EFFECTIVE_DATE = "October 24, 2026";
@@ -15,19 +14,7 @@ export function LegalPage({
 }) {
   return (
     <div className="min-h-[100dvh] bg-sand text-ink">
-      <header className="sticky top-0 z-30 border-b border-line/60 bg-sand/85 backdrop-blur">
-        <div className="mx-auto flex max-w-[1100px] items-center justify-between px-5 py-4">
-          <Link href="/" aria-label="Pulse home">
-            <Logo size={32} withWordmark />
-          </Link>
-          <Link
-            href="/login"
-            className="rounded-full px-4 py-2 text-[14px] font-semibold text-ink2 hover:text-ink"
-          >
-            Log in
-          </Link>
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="mx-auto max-w-[760px] px-5 pb-6 pt-12 sm:pt-16">
         <div className="kicker mb-4">Legal</div>
