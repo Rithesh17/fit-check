@@ -69,3 +69,27 @@ input[type="number"] {
     letter-spacing: -0.025em;
   }
 }
+
+/* Privacy Policy / Terms of Service body copy */
+.legal p,
+.legal li {
+  font-size: 15px;
+  line-height: 1.7;
+  color: #3a352c;
+}
+.legal p + p,
+.legal p + ul,
+.legal ul + p {
+  margin-top: 0.85rem;
+}
+.legal ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.legal li + li {
+  margin-top: 0.4rem;
+}
+.legal strong {
+  color: #1a1712;
+  font-weight: 700;
+}
